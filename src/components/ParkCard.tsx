@@ -55,16 +55,16 @@ export function ParkCard({ park, visit, onPress }: Props) {
         </Text>
         <View style={styles.meta}>
           <View style={[styles.typePill, { backgroundColor: park.source === 'nps' ? colors.tintLight : colors.surface }]}>
-            <Text style={[styles.typeLabel, { color: park.source === 'nps' ? colors.tintDark : colors.textSecondary }]}>
-              {park.source === 'nps' ? 'National' : 'State'}
+            <Text style={[styles.typeLabel, { color: park.source === 'nps' ? colors.tintDark : colors.textSecondary }]} numberOfLines={1}>
+              {park.designation || (park.source === 'nps' ? 'NPS Site' : 'State Park')}
             </Text>
           </View>
-          {stateList ? (
-            <Text style={[styles.states, { color: colors.textSecondary }]} numberOfLines={1}>
-              {stateList}
-            </Text>
-          ) : null}
         </View>
+        {stateList ? (
+          <Text style={[styles.states, { color: colors.textSecondary }]} numberOfLines={1}>
+            {stateList}
+          </Text>
+        ) : null}
         {visit && (
           <Text style={[styles.visitDate, { color: colors.tint }]}>
             Visited {new Date(visit.visitedAt).toLocaleDateString()}

@@ -3,7 +3,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { Park } from '../types';
 import { searchParks } from '../db/parks';
 
-export type SourceFilter = 'all' | 'nps' | 'state';
+export type SourceFilter = 'all' | 'nps' | 'state' | 'nps_parks_only';
 
 export function useParks(
   query: string,
@@ -22,7 +22,13 @@ export function useParks(
     async (pageNum: number, reset: boolean) => {
       if (reset) setLoading(true);
       try {
-        const results = await searchParks(db, query, source, stateFilter, PAGE_SIZE, pageNum * PAGE_SIZE);
+        // 'nps_parks_only' = only true National Parks designation
+        const dbSource = source === 'nps_parks_only' ? 'nps' : source;
+        const designation = source === 'nps_parks_only' ? 'National Park' : null;
+
+        const results = await searchParks(
+          db, query, dbSource, stateFilter, PAGE_SIZE, pageNum * PAGE_SIZE, designation
+        );
         if (reset) {
           setParks(results);
         } else {

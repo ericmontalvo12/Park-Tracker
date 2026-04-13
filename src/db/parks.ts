@@ -55,7 +55,8 @@ export async function searchParks(
   source: 'all' | 'nps' | 'state',
   stateFilter: string | null,
   limit = 50,
-  offset = 0
+  offset = 0,
+  designationFilter: string | null = null
 ): Promise<Park[]> {
   const conditions: string[] = [];
   const params: any[] = [];
@@ -71,6 +72,10 @@ export async function searchParks(
   if (stateFilter) {
     conditions.push('state_codes LIKE ?');
     params.push(`%${stateFilter}%`);
+  }
+  if (designationFilter) {
+    conditions.push('designation = ?');
+    params.push(designationFilter);
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';

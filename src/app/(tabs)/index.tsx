@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FlatList, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native';
+import { FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { Colors } from '../../constants/colors';
@@ -12,8 +12,9 @@ import { Visit } from '../../types';
 
 const SOURCE_FILTERS: { label: string; value: SourceFilter }[] = [
   { label: 'All', value: 'all' },
-  { label: 'National', value: 'nps' },
-  { label: 'State', value: 'state' },
+  { label: 'National Parks', value: 'nps_parks_only' },
+  { label: 'All NPS Sites', value: 'nps' },
+  { label: 'State Parks', value: 'state' },
 ];
 
 export default function BrowseScreen() {
@@ -39,7 +40,11 @@ export default function BrowseScreen() {
         <View style={styles.searchRow}>
           <SearchBar value={query} onChangeText={setQuery} />
         </View>
-        <View style={styles.filterRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterRow}
+        >
           {SOURCE_FILTERS.map(f => (
             <TouchableOpacity
               key={f.value}
@@ -62,7 +67,7 @@ export default function BrowseScreen() {
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
       </View>
 
       <FlatList
@@ -114,9 +119,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   filterRow: {
-    flexDirection: 'row',
     gap: 8,
     paddingHorizontal: 16,
+    paddingRight: 24,
   },
   filterChip: {
     paddingHorizontal: 14,
