@@ -12,8 +12,7 @@ import { Visit } from '../../types';
 
 const SOURCE_FILTERS: { label: string; value: SourceFilter }[] = [
   { label: 'All', value: 'all' },
-  { label: 'National Parks', value: 'nps_parks_only' },
-  { label: 'All NPS Sites', value: 'nps' },
+  { label: 'National Parks', value: 'nps' },
   { label: 'State Parks', value: 'state' },
 ];
 
