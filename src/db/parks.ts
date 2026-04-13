@@ -97,6 +97,21 @@ export async function getVisitedParks(db: SQLite.SQLiteDatabase): Promise<Park[]
   return rows.map(rowToPark);
 }
 
+export async function getStatesForSource(
+  db: SQLite.SQLiteDatabase,
+  source: 'nps' | 'state'
+): Promise<string[]> {
+  const rows = await db.getAllAsync<{ state_codes: string }>(
+    'SELECT DISTINCT state_codes FROM parks WHERE source = ? AND state_codes IS NOT NULL AND state_codes != ""',
+    [source]
+  );
+  const stateSet = new Set<string>();
+  for (const row of rows) {
+    row.state_codes.split(',').forEach(s => stateSet.add(s.trim()));
+  }
+  return Array.from(stateSet).sort();
+}
+
 export async function getParkCount(db: SQLite.SQLiteDatabase, source?: 'nps' | 'state'): Promise<number> {
   const row = source
     ? await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM parks WHERE source = ?', [source])
