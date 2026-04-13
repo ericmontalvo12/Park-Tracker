@@ -30,7 +30,7 @@ export function PhotoGrid({ photos, onAddPhoto, onDeletePhoto }: Props) {
   const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
   const [pickerVisible, setPickerVisible] = useState(false);
 
-  const handleLongPress = (photo: Photo) => {
+  const handleDelete = (photo: Photo) => {
     Alert.alert('Delete Photo', 'Remove this photo from this park?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: () => onDeletePhoto(photo.id) },
@@ -65,16 +65,20 @@ export function PhotoGrid({ photos, onAddPhoto, onDeletePhoto }: Props) {
           keyExtractor={item => item.id.toString()}
           contentContainerStyle={styles.grid}
           renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[styles.cell, { margin: GAP / 2 }]}
-              onLongPress={() => handleLongPress(item)}
-            >
+            <View style={[styles.cell, { margin: GAP / 2 }]}>
               <Image
                 source={{ uri: item.uri }}
                 style={styles.cellImage}
                 contentFit="cover"
               />
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.deleteBtn}
+                onPress={() => handleDelete(item)}
+                hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+              >
+                <Text style={styles.deleteX}>✕</Text>
+              </TouchableOpacity>
+            </View>
           )}
         />
       )}
@@ -130,5 +134,21 @@ const styles = StyleSheet.create({
   cellImage: {
     width: CELL_SIZE,
     height: CELL_SIZE,
+  },
+  deleteBtn: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteX: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
   },
 });
