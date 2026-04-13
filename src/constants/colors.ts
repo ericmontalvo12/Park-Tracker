@@ -1,0 +1,46 @@
+export const Colors = {
+  light: {
+    background: '#FFFFFF',
+    surface: '#F5F5F0',
+    card: '#FFFFFF',
+    text: '#1A1A1A',
+    textSecondary: '#6B7280',
+    textMuted: '#9CA3AF',
+    border: '#E5E7EB',
+    tint: '#2D7D46',        // forest green — primary brand color
+    tintLight: '#E8F5EC',
+    tintDark: '#1E5530',
+    accent: '#F59E0B',      // amber — visited badge / star
+    danger: '#EF4444',
+    tabBar: '#FFFFFF',
+    tabBarBorder: '#E5E7EB',
+    tabIconDefault: '#9CA3AF',
+    tabIconSelected: '#2D7D46',
+    mapVisited: '#2D7D46',
+    mapUnvisited: '#9CA3AF',
+    shimmer: '#E5E7EB',
+  },
+  dark: {
+    background: '#111827',
+    surface: '#1F2937',
+    card: '#1F2937',
+    text: '#F9FAFB',
+    textSecondary: '#9CA3AF',
+    textMuted: '#6B7280',
+    border: '#374151',
+    tint: '#4ADE80',
+    tintLight: '#14532D',
+    tintDark: '#86EFAC',
+    accent: '#FCD34D',
+    danger: '#F87171',
+    tabBar: '#1F2937',
+    tabBarBorder: '#374151',
+    tabIconDefault: '#6B7280',
+    tabIconSelected: '#4ADE80',
+    mapVisited: '#4ADE80',
+    mapUnvisited: '#6B7280',
+    shimmer: '#374151',
+  },
+} as const;
+
+export type ColorScheme = keyof typeof Colors;
