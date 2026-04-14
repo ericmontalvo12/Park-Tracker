@@ -13,7 +13,7 @@ const SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 // API variations (e.g. "National Park and Preserve" vs "National Park & Preserve").
 const OFFICIAL_63_PARK_CODES = new Set([
   'acad', // Acadia
-  'amsa', // National Park of American Samoa
+  'npsa', // National Park of American Samoa
   'arch', // Arches
   'badl', // Badlands
   'bibe', // Big Bend
@@ -49,7 +49,7 @@ const OFFICIAL_63_PARK_CODES = new Set([
   'jotr', // Joshua Tree
   'katm', // Katmai
   'kefj', // Kenai Fjords
-  'kica', // Kings Canyon
+  'seki', // Sequoia & Kings Canyon (NPS API combines both under one entry)
   'kova', // Kobuk Valley
   'lacl', // Lake Clark
   'lavo', // Lassen Volcanic
@@ -64,7 +64,7 @@ const OFFICIAL_63_PARK_CODES = new Set([
   'redw', // Redwood
   'romo', // Rocky Mountain
   'sagu', // Saguaro
-  'sequ', // Sequoia
+  // 'sequ' — covered by 'seki' above
   'shen', // Shenandoah
   'thro', // Theodore Roosevelt
   'viis', // Virgin Islands
@@ -116,7 +116,7 @@ async function fetchNpsPage(start: number, limit: number): Promise<NpsApiPark[]>
 
 export async function syncNpsParks(db: SQLite.SQLiteDatabase): Promise<void> {
   // v2 cache key forces a re-sync after the outdoor-only filter was added
-  const lastSync = await kvGet(db, 'nps_last_sync_v5');
+  const lastSync = await kvGet(db, 'nps_last_sync_v6');
   if (lastSync && Date.now() - parseInt(lastSync, 10) < SYNC_INTERVAL_MS) {
     return; // Still fresh
   }
@@ -132,7 +132,7 @@ export async function syncNpsParks(db: SQLite.SQLiteDatabase): Promise<void> {
     // Delete all NPS rows first so stale non-park entries don't linger.
     await db.runAsync("DELETE FROM parks WHERE source = 'nps'");
     await batchUpsertParks(db, normalized);
-    await kvSet(db, 'nps_last_sync_v5', Date.now().toString());
+    await kvSet(db, 'nps_last_sync_v6', Date.now().toString());
   } catch (error) {
     console.warn('NPS sync failed, using cached data:', error);
   }
