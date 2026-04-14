@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, useColorScheme, View } from 'react-native';
+import { Animated, Modal, Pressable, StyleSheet, Text, useColorScheme, View } from 'react-native';
 import { Colors } from '../constants/colors';
 import { BadgeDefinition } from '../constants/badges';
 
@@ -11,84 +11,109 @@ interface Props {
 export function BadgeToast({ badge, onDismiss }: Props) {
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
-  const translateY = useRef(new Animated.Value(120)).current;
+  const scale = useRef(new Animated.Value(0.7)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Slide in
+    // Pop in
     Animated.parallel([
-      Animated.spring(translateY, { toValue: 0, useNativeDriver: true, damping: 18, stiffness: 200 }),
-      Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, useNativeDriver: true, damping: 14, stiffness: 200 }),
+      Animated.timing(opacity, { toValue: 1, duration: 150, useNativeDriver: true }),
     ]).start();
 
-    // Auto-dismiss after 3s
-    const timer = setTimeout(() => {
-      Animated.parallel([
-        Animated.timing(translateY, { toValue: 120, duration: 300, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0, duration: 300, useNativeDriver: true }),
-      ]).start(() => onDismiss());
-    }, 3000);
-
+    // Auto-dismiss after 4s
+    const timer = setTimeout(dismiss, 4000);
     return () => clearTimeout(timer);
   }, []);
 
+  const dismiss = () => {
+    Animated.parallel([
+      Animated.timing(scale, { toValue: 0.8, duration: 200, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+    ]).start(() => onDismiss());
+  };
+
   return (
-    <Animated.View
-      style={[
-        styles.container,
-        { backgroundColor: colors.card, borderColor: colors.tint, transform: [{ translateY }], opacity },
-      ]}
-    >
-      <Text style={styles.emoji}>{badge.emoji}</Text>
-      <View style={styles.text}>
-        <Text style={[styles.label, { color: colors.tint }]}>Badge Earned!</Text>
-        <Text style={[styles.name, { color: colors.text }]}>{badge.name}</Text>
-        <Text style={[styles.desc, { color: colors.textSecondary }]} numberOfLines={2}>
-          {badge.description}
-        </Text>
-      </View>
-    </Animated.View>
+    <Modal transparent animationType="none" statusBarTranslucent>
+      <Pressable style={styles.backdrop} onPress={dismiss}>
+        <Animated.View
+          style={[
+            styles.card,
+            { backgroundColor: colors.card, transform: [{ scale }], opacity },
+          ]}
+        >
+          <View style={[styles.iconCircle, { backgroundColor: colors.tintLight }]}>
+            <Text style={styles.emoji}>{badge.emoji}</Text>
+          </View>
+          <Text style={[styles.earned, { color: colors.tint }]}>Badge Earned!</Text>
+          <Text style={[styles.name, { color: colors.text }]}>{badge.name}</Text>
+          <Text style={[styles.desc, { color: colors.textSecondary }]}>{badge.description}</Text>
+          <Pressable style={[styles.btn, { backgroundColor: colors.tint }]} onPress={dismiss}>
+            <Text style={styles.btnText}>Awesome!</Text>
+          </Pressable>
+        </Animated.View>
+      </Pressable>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    position: 'absolute',
-    bottom: 100,
-    left: 16,
-    right: 16,
-    flexDirection: 'row',
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    gap: 12,
+    justifyContent: 'center',
+    padding: 32,
+  },
+  card: {
+    width: '100%',
+    borderRadius: 24,
+    padding: 28,
+    alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  iconCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
   emoji: {
-    fontSize: 36,
+    fontSize: 48,
   },
-  text: {
-    flex: 1,
-  },
-  label: {
-    fontSize: 11,
+  earned: {
+    fontSize: 13,
     fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 2,
+    letterSpacing: 1,
+    marginBottom: 6,
   },
   name: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 2,
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 8,
+    textAlign: 'center',
   },
   desc: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  btn: {
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  btnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
