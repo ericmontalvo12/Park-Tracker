@@ -58,6 +58,28 @@ export default function StatsScreen() {
     }, [refresh, loadBadges])
   );
 
+  const resetAllData = () => {
+    Alert.alert(
+      'Reset All Data',
+      'This will permanently delete all visits, badges, and photos. Cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset Everything',
+          style: 'destructive',
+          onPress: async () => {
+            await db.runAsync('DELETE FROM visits');
+            await db.runAsync('DELETE FROM earned_badges');
+            await db.runAsync('DELETE FROM photos');
+            refresh();
+            loadBadges();
+            Alert.alert('Done', 'All data cleared.');
+          },
+        },
+      ]
+    );
+  };
+
   const exportToConsole = async () => {
     const rows = await db.getAllAsync<{ full_name: string; state_codes: string; designation: string }>(
       "SELECT full_name, state_codes, designation FROM parks WHERE source='state' ORDER BY state_codes, full_name"
@@ -206,6 +228,16 @@ export default function StatsScreen() {
       >
         <Text style={[styles.exportText, { color: colors.textMuted }]}>
           Export State Parks to Console
+        </Text>
+      </TouchableOpacity>
+
+      {/* DEV ONLY — wipe all user data */}
+      <TouchableOpacity
+        style={[styles.exportBtn, { borderColor: '#FF3B30' }]}
+        onPress={resetAllData}
+      >
+        <Text style={[styles.exportText, { color: '#FF3B30' }]}>
+          Reset All Data
         </Text>
       </TouchableOpacity>
     </ScrollView>
