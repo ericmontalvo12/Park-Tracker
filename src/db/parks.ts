@@ -55,7 +55,8 @@ export async function searchParks(
   source: 'all' | 'nps' | 'state',
   stateFilter: string | null,
   limit = 50,
-  offset = 0
+  offset = 0,
+  designationFilter: string | null = null
 ): Promise<Park[]> {
   const conditions: string[] = [];
   const params: any[] = [];
@@ -71,6 +72,10 @@ export async function searchParks(
   if (stateFilter) {
     conditions.push('state_codes LIKE ?');
     params.push(`%${stateFilter}%`);
+  }
+  if (designationFilter) {
+    conditions.push('designation = ?');
+    params.push(designationFilter);
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -90,6 +95,21 @@ export async function getVisitedParks(db: SQLite.SQLiteDatabase): Promise<Park[]
      ORDER BY v.visited_at DESC`
   );
   return rows.map(rowToPark);
+}
+
+export async function getStatesForSource(
+  db: SQLite.SQLiteDatabase,
+  source: 'nps' | 'state'
+): Promise<string[]> {
+  const rows = await db.getAllAsync<{ state_codes: string }>(
+    'SELECT DISTINCT state_codes FROM parks WHERE source = ? AND state_codes IS NOT NULL AND state_codes != ""',
+    [source]
+  );
+  const stateSet = new Set<string>();
+  for (const row of rows) {
+    row.state_codes.split(',').forEach(s => stateSet.add(s.trim()));
+  }
+  return Array.from(stateSet).sort();
 }
 
 export async function getParkCount(db: SQLite.SQLiteDatabase, source?: 'nps' | 'state'): Promise<number> {

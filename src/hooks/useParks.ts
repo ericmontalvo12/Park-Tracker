@@ -22,7 +22,9 @@ export function useParks(
     async (pageNum: number, reset: boolean) => {
       if (reset) setLoading(true);
       try {
-        const results = await searchParks(db, query, source, stateFilter, PAGE_SIZE, pageNum * PAGE_SIZE);
+        const results = await searchParks(
+          db, query, source, stateFilter, PAGE_SIZE, pageNum * PAGE_SIZE
+        );
         if (reset) {
           setParks(results);
         } else {

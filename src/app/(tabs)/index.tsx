@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { FlatList, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { Colors } from '../../constants/colors';
@@ -8,12 +8,14 @@ import { SearchBar } from '../../components/SearchBar';
 import { EmptyState } from '../../components/EmptyState';
 import { useParks, SourceFilter } from '../../hooks/useParks';
 import { getVisit } from '../../db/visits';
+import { getStatesForSource } from '../../db/parks';
+import { US_STATES } from '../../constants/designations';
 import { Visit } from '../../types';
 
 const SOURCE_FILTERS: { label: string; value: SourceFilter }[] = [
   { label: 'All', value: 'all' },
-  { label: 'National', value: 'nps' },
-  { label: 'State', value: 'state' },
+  { label: 'National Parks', value: 'nps' },
+  { label: 'State Parks', value: 'state' },
 ];
 
 export default function BrowseScreen() {
@@ -23,9 +25,26 @@ export default function BrowseScreen() {
 
   const [query, setQuery] = useState('');
   const [source, setSource] = useState<SourceFilter>('all');
+  const [selectedState, setSelectedState] = useState<string | null>(null);
+  const [availableStates, setAvailableStates] = useState<string[]>([]);
   const [visitCache, setVisitCache] = useState<Record<string, Visit | null>>({});
 
-  const { parks, loading, loadMore, refresh } = useParks(query, source, null);
+  const { parks, loading, loadMore, refresh } = useParks(query, source, selectedState);
+
+  // Load states when switching to state or nps filter
+  useEffect(() => {
+    setSelectedState(null);
+    if (source === 'state' || source === 'nps') {
+      getStatesForSource(db, source).then(setAvailableStates);
+    } else {
+      setAvailableStates([]);
+    }
+  }, [source, db]);
+
+  const handleSourceChange = (value: SourceFilter) => {
+    setSource(value);
+    setSelectedState(null);
+  };
 
   const loadVisit = async (parkId: string) => {
     if (parkId in visitCache) return;
@@ -39,7 +58,13 @@ export default function BrowseScreen() {
         <View style={styles.searchRow}>
           <SearchBar value={query} onChangeText={setQuery} />
         </View>
-        <View style={styles.filterRow}>
+
+        {/* Source filter chips */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterRow}
+        >
           {SOURCE_FILTERS.map(f => (
             <TouchableOpacity
               key={f.value}
@@ -50,7 +75,7 @@ export default function BrowseScreen() {
                   borderColor: source === f.value ? colors.tint : colors.border,
                 },
               ]}
-              onPress={() => setSource(f.value)}
+              onPress={() => handleSourceChange(f.value)}
             >
               <Text
                 style={[
@@ -62,7 +87,48 @@ export default function BrowseScreen() {
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
+
+        {/* State filter row — shown when National Parks or State Parks is selected */}
+        {availableStates.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.stateFilterRow}
+          >
+            <TouchableOpacity
+              style={[
+                styles.stateChip,
+                {
+                  backgroundColor: selectedState === null ? colors.accent : colors.surface,
+                  borderColor: selectedState === null ? colors.accent : colors.border,
+                },
+              ]}
+              onPress={() => setSelectedState(null)}
+            >
+              <Text style={[styles.stateLabel, { color: selectedState === null ? '#fff' : colors.textSecondary }]}>
+                All States
+              </Text>
+            </TouchableOpacity>
+            {availableStates.map(code => (
+              <TouchableOpacity
+                key={code}
+                style={[
+                  styles.stateChip,
+                  {
+                    backgroundColor: selectedState === code ? colors.accent : colors.surface,
+                    borderColor: selectedState === code ? colors.accent : colors.border,
+                  },
+                ]}
+                onPress={() => setSelectedState(selectedState === code ? null : code)}
+              >
+                <Text style={[styles.stateLabel, { color: selectedState === code ? '#fff' : colors.textSecondary }]}>
+                  {US_STATES[code] ?? code}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
       </View>
 
       <FlatList
@@ -107,16 +173,23 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingTop: 8,
-    paddingBottom: 8,
+    paddingBottom: 4,
   },
   searchRow: {
     paddingHorizontal: 16,
     marginBottom: 10,
   },
   filterRow: {
-    flexDirection: 'row',
     gap: 8,
     paddingHorizontal: 16,
+    paddingRight: 24,
+    marginBottom: 8,
+  },
+  stateFilterRow: {
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingRight: 24,
+    paddingBottom: 8,
   },
   filterChip: {
     paddingHorizontal: 14,
@@ -127,6 +200,16 @@ const styles = StyleSheet.create({
   filterLabel: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  stateChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  stateLabel: {
+    fontSize: 12,
+    fontWeight: '500',
   },
   listContent: {
     paddingVertical: 8,

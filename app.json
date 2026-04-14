@@ -61,8 +61,7 @@
         {
           "locationWhenInUsePermission": "Park Tracker uses your location to show you on the map near parks."
         }
-      ],
-      "react-native-maps"
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
