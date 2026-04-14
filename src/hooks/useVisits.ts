@@ -10,7 +10,7 @@ import {
   getAllVisits,
 } from '../db/visits';
 import { evaluateBadges } from '../services/badgeEvaluator';
-import { useBadgeNotifier } from '../app/_layout';
+import { useBadgeNotifier } from '../context/BadgeContext';
 
 export function useVisit(parkId: string) {
   const db = useSQLiteContext();
@@ -34,8 +34,12 @@ export function useVisit(parkId: string) {
       const newVisit = await addVisit(db, parkId);
       setVisit(newVisit);
       // Check for newly earned badges whenever a park is marked visited
-      const newBadges = await evaluateBadges(db);
-      if (newBadges.length > 0) notify(newBadges);
+      try {
+        const newBadges = await evaluateBadges(db);
+        if (newBadges.length > 0) notify(newBadges);
+      } catch (err) {
+        console.warn('Badge evaluation failed:', err);
+      }
     }
   }, [db, parkId, visit, notify]);
 
@@ -48,8 +52,12 @@ export function useVisit(parkId: string) {
     await updateVisitRating(db, parkId, rating);
     setVisit(prev => prev ? { ...prev, rating } : prev);
     // Rating badges (e.g. Critic) — check after each rating saved
-    const newBadges = await evaluateBadges(db);
-    if (newBadges.length > 0) notify(newBadges);
+    try {
+      const newBadges = await evaluateBadges(db);
+      if (newBadges.length > 0) notify(newBadges);
+    } catch (err) {
+      console.warn('Badge evaluation failed:', err);
+    }
   }, [db, parkId, notify]);
 
   return { visit, loading, toggle, saveNotes, saveRating };

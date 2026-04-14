@@ -14,6 +14,13 @@ export function BadgeToast({ badge, onDismiss }: Props) {
   const scale = useRef(new Animated.Value(0.7)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
+  const dismiss = () => {
+    Animated.parallel([
+      Animated.timing(scale, { toValue: 0.8, duration: 200, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+    ]).start(() => onDismiss());
+  };
+
   useEffect(() => {
     // Pop in
     Animated.parallel([
@@ -25,13 +32,6 @@ export function BadgeToast({ badge, onDismiss }: Props) {
     const timer = setTimeout(dismiss, 4000);
     return () => clearTimeout(timer);
   }, []);
-
-  const dismiss = () => {
-    Animated.parallel([
-      Animated.timing(scale, { toValue: 0.8, duration: 200, useNativeDriver: true }),
-      Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-    ]).start(() => onDismiss());
-  };
 
   return (
     <Modal transparent animationType="none" statusBarTranslucent>
