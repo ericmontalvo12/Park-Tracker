@@ -4,17 +4,17 @@ import { batchUpsertParks } from '../db/parks';
 import { Park } from '../types';
 
 const SPARQL_ENDPOINT = 'https://query.wikidata.org/sparql';
-const CACHE_KEY = 'wikidata_state_parks_v1';
+const CACHE_KEY = 'wikidata_state_parks_v2'; // bumped — query + dedup fixes
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // Fetches all US entities of a given Wikidata type (e.g. Q179049 = state park).
 // We run separate queries per type so timeouts are less likely.
 const QUERIES: Array<{ type: string; qid: string; designation: string }> = [
-  { type: 'state park',             qid: 'Q179049',  designation: 'State Park' },
-  { type: 'state forest',           qid: 'Q1439621', designation: 'State Forest' },
-  { type: 'state beach',            qid: 'Q2074892', designation: 'State Beach' },
-  { type: 'state recreation area',  qid: 'Q2319595', designation: 'State Recreation Area' },
-  { type: 'state natural area',     qid: 'Q7598388', designation: 'State Natural Area' },
+  { type: 'state park',            qid: 'Q179049',  designation: 'State Park' },
+  { type: 'state forest',          qid: 'Q1439621', designation: 'State Forest' },
+  { type: 'state beach',           qid: 'Q2074892', designation: 'State Beach' },
+  { type: 'state recreation area', qid: 'Q2319595', designation: 'State Recreation Area' },
+  { type: 'state natural area',    qid: 'Q7598388', designation: 'State Natural Area' },
 ];
 
 interface WDBinding {
@@ -24,6 +24,9 @@ interface WDBinding {
   stateAbbr?: { value: string };
 }
 
+// Two-hop P131 lookup (park → [county →] state) so parks filed under a county
+// still get a state code. The UNION keeps the query fast by only going one
+// extra level rather than using unbounded wdt:P131+.
 function buildQuery(qid: string): string {
   return `
 SELECT DISTINCT ?park ?parkLabel ?coord ?stateAbbr WHERE {
@@ -31,8 +34,13 @@ SELECT DISTINCT ?park ?parkLabel ?coord ?stateAbbr WHERE {
   ?park wdt:P17 wd:Q30 .
   OPTIONAL { ?park wdt:P625 ?coord . }
   OPTIONAL {
-    ?park wdt:P131 ?state .
-    ?state wdt:P300 ?stateAbbr .
+    {
+      ?park wdt:P131 ?loc .
+    } UNION {
+      ?park wdt:P131 ?mid .
+      ?mid  wdt:P131 ?loc .
+    }
+    ?loc wdt:P300 ?stateAbbr .
     FILTER(STRSTARTS(?stateAbbr, "US-"))
   }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
@@ -62,30 +70,44 @@ async function fetchParksOfType(
   const json = await res.json();
   const bindings: WDBinding[] = json.results?.bindings ?? [];
 
-  const parks: Park[] = [];
+  // Deduplicate by Wikidata QID within this result set.
+  // The two-hop UNION query can return multiple rows for the same park
+  // (one per matched ?loc). We keep the row that has a state code;
+  // if none have one, we keep the first row we saw.
+  const parkMap = new Map<string, Park>();
+
   for (const b of bindings) {
     const name = b.parkLabel?.value;
     if (!name || name.startsWith('Q')) continue; // skip unlabelled entries
 
     const coords = b.coord ? parseCoord(b.coord.value) : null;
+    // Require coordinates — parks without them can't be mapped or located.
+    if (!coords) continue;
+
     const rawState = b.stateAbbr?.value ?? '';
     const stateCode = rawState.startsWith('US-') ? rawState.slice(3) : rawState;
+    const id = `wiki_${b.park.value.split('/').pop()}`;
 
-    parks.push({
-      id: `wiki_${b.park.value.split('/').pop()}`,
+    const existing = parkMap.get(id);
+    // Prefer entries that have a state code over those without.
+    if (existing && existing.stateCodes && !stateCode) continue;
+
+    parkMap.set(id, {
+      id,
       source: 'state',
       fullName: name,
       description: '',
       stateCodes: stateCode,
-      latitude: coords?.lat ?? null,
-      longitude: coords?.lon ?? null,
+      latitude: coords.lat,
+      longitude: coords.lon,
       designation,
       imageUrl: null,
       rawJson: '',
       lastSynced: Date.now(),
     });
   }
-  return parks;
+
+  return Array.from(parkMap.values());
 }
 
 export async function syncStateParksfromWikidata(

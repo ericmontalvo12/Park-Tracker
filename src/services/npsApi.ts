@@ -132,9 +132,6 @@ export async function syncNpsParks(db: SQLite.SQLiteDatabase): Promise<void> {
 
   try {
     const allParks = await fetchNpsPage(0, 500);
-    const foundCodes = new Set(allParks.map(p => p.parkCode));
-    const missingCodes = [...OFFICIAL_63_PARK_CODES].filter(c => !foundCodes.has(c));
-    if (missingCodes.length) console.warn('[NPS] Park codes not found in API:', missingCodes);
     const nationalParks = allParks.filter(p => OFFICIAL_63_PARK_CODES.has(p.parkCode));
     const normalized = nationalParks.flatMap(normalizeNpsPark);
 
