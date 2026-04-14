@@ -8,25 +8,12 @@ const NPS_API_KEY =
 const NPS_BASE_URL = 'https://developer.nps.gov/api/v1';
 const SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-// Only outdoor/nature-focused NPS designations — excludes historic sites,
-// monuments, battlefields, memorials, parkways, and heritage areas.
-const OUTDOOR_DESIGNATIONS = new Set([
+// Only the 63 congressionally-designated National Parks.
+// "National Park & Preserve" covers parks like Denali, Wrangell-St. Elias, etc.
+// that are counted in the official 63.
+const NATIONAL_PARK_DESIGNATIONS = new Set([
   'National Park',
-  'National Preserve',
   'National Park & Preserve',
-  'National Recreation Area',
-  'National Seashore',
-  'National Lakeshore',
-  'National River',
-  'National Wild and Scenic River',
-  'National Wild and Scenic Riverway',
-  'National Scenic Trail',
-  'National Reserve',
-  'National Scenic Area',
-  'National Forest',
-  'National Grassland',
-  'National Wilderness Area',
-  'National Volcanic Monument',
 ]);
 
 interface NpsApiPark {
@@ -68,18 +55,20 @@ async function fetchNpsPage(start: number, limit: number): Promise<NpsApiPark[]>
 
 export async function syncNpsParks(db: SQLite.SQLiteDatabase): Promise<void> {
   // v2 cache key forces a re-sync after the outdoor-only filter was added
-  const lastSync = await kvGet(db, 'nps_last_sync_v2');
+  const lastSync = await kvGet(db, 'nps_last_sync_v3');
   if (lastSync && Date.now() - parseInt(lastSync, 10) < SYNC_INTERVAL_MS) {
     return; // Still fresh
   }
 
   try {
     const allParks = await fetchNpsPage(0, 500);
-    // Filter to outdoor designations only
-    const outdoorParks = allParks.filter(p => OUTDOOR_DESIGNATIONS.has(p.designation));
-    const normalized = outdoorParks.map(normalizeNpsPark);
+    const nationalParks = allParks.filter(p => NATIONAL_PARK_DESIGNATIONS.has(p.designation));
+    const normalized = nationalParks.map(normalizeNpsPark);
+
+    // Delete all NPS rows first so stale non-park entries don't linger.
+    await db.runAsync("DELETE FROM parks WHERE source = 'nps'");
     await batchUpsertParks(db, normalized);
-    await kvSet(db, 'nps_last_sync_v2', Date.now().toString());
+    await kvSet(db, 'nps_last_sync_v3', Date.now().toString());
   } catch (error) {
     console.warn('NPS sync failed, using cached data:', error);
   }
