@@ -47,6 +47,7 @@ function checkBadge(
     case 'explorer':      return total >= 5;
     case 'trailblazer':   return total >= 15;
     case 'adventurer':    return total >= 30;
+    case 'enthusiast':    return total >= 50;
     case 'park_ranger':   return total >= 63;
     case 'legend':        return total >= 100;
 

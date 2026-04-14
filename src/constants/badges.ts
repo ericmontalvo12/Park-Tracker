@@ -8,12 +8,13 @@ export interface BadgeDefinition {
 
 // ─── Milestone ────────────────────────────────────────────────────────────────
 const MILESTONE: BadgeDefinition[] = [
-  { id: 'first_steps',    emoji: '🥾', name: 'First Steps',    description: 'Visit your first park' },
-  { id: 'explorer',       emoji: '🧭', name: 'Explorer',       description: 'Visit 5 parks' },
-  { id: 'trailblazer',    emoji: '🌲', name: 'Trailblazer',    description: 'Visit 15 parks' },
-  { id: 'adventurer',     emoji: '⛺', name: 'Adventurer',     description: 'Visit 30 parks' },
-  { id: 'park_ranger',    emoji: '🎖️', name: 'Park Ranger',    description: 'Visit 63 parks' },
-  { id: 'legend',         emoji: '🏆', name: 'Legend',          description: 'Visit 100 parks' },
+  { id: 'first_steps',    emoji: '🥾', name: 'First Steps',      description: 'Visit your first park' },
+  { id: 'explorer',       emoji: '🧭', name: 'Explorer',         description: 'Visit 5 parks' },
+  { id: 'trailblazer',    emoji: '🌲', name: 'Trailblazer',      description: 'Visit 15 parks' },
+  { id: 'adventurer',     emoji: '⛺', name: 'Adventurer',       description: 'Visit 30 parks' },
+  { id: 'enthusiast',     emoji: '🎽', name: 'Park Enthusiast',  description: 'Visit 50 parks' },
+  { id: 'park_ranger',    emoji: '🎖️', name: 'Park Ranger',      description: 'Visit 63 parks' },
+  { id: 'legend',         emoji: '🏆', name: 'Legend',           description: 'Visit 100 parks' },
 ];
 
 // ─── National Parks ────────────────────────────────────────────────────────────
