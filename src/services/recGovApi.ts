@@ -32,6 +32,33 @@ interface RecGovRecArea {
   RECAREAADDRESS?: Array<{ AddressStateCode: string }>;
 }
 
+// Derive a human-readable designation from the area name rather than
+// labelling every RecGov entry "State Park".
+function inferDesignation(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes('national wildlife refuge'))          return 'National Wildlife Refuge';
+  if (n.includes('national marine sanctuary'))         return 'National Marine Sanctuary';
+  if (n.includes('national seashore'))                 return 'National Seashore';
+  if (n.includes('national lakeshore'))                return 'National Lakeshore';
+  if (n.includes('national recreation area'))          return 'National Recreation Area';
+  if (n.includes('national monument'))                 return 'National Monument';
+  if (n.includes('national forest'))                   return 'National Forest';
+  if (n.includes('national grassland'))                return 'National Grassland';
+  if (n.includes('national estuarine research reserve')) return 'National Estuarine Reserve';
+  if (n.includes('outstanding natural area'))          return 'Outstanding Natural Area';
+  if (n.includes('wilderness'))                        return 'Wilderness Area';
+  if (n.includes('state park'))                        return 'State Park';
+  if (n.includes('state forest'))                      return 'State Forest';
+  if (n.includes('state beach'))                       return 'State Beach';
+  if (n.includes('state recreation area'))             return 'State Recreation Area';
+  if (n.includes('state natural area'))                return 'State Natural Area';
+  if (n.includes('wildlife refuge') || n.includes('wildlife management')) return 'Wildlife Refuge';
+  if (n.includes('wildlife area'))                     return 'Wildlife Area';
+  if (n.includes('preserve'))                          return 'Nature Preserve';
+  if (n.includes('nature reserve') || n.includes('nature area')) return 'Nature Reserve';
+  return 'Recreation Area';
+}
+
 function normalizeRecArea(raw: RecGovRecArea, stateCode: string): Park | null {
   // Skip entries with no coordinates
   if (!raw.RecAreaLatitude || !raw.RecAreaLongitude ||
@@ -51,7 +78,7 @@ function normalizeRecArea(raw: RecGovRecArea, stateCode: string): Park | null {
     stateCodes: stateCode,
     latitude: raw.RecAreaLatitude,
     longitude: raw.RecAreaLongitude,
-    designation: 'State Park',
+    designation: inferDesignation(raw.RecAreaName),
     imageUrl: primaryImage,
     rawJson: JSON.stringify(raw),
     lastSynced: Date.now(),
@@ -89,7 +116,7 @@ export async function syncRecGovStateParks(
     return;
   }
 
-  const alreadySynced = await kvGet(db, 'recgov_state_parks_synced_v1');
+  const alreadySynced = await kvGet(db, 'recgov_state_parks_synced_v2');
   if (alreadySynced === '1') return;
 
   try {
@@ -107,7 +134,7 @@ export async function syncRecGovStateParks(
       }
     }
 
-    await kvSet(db, 'recgov_state_parks_synced_v1', '1');
+    await kvSet(db, 'recgov_state_parks_synced_v2', '1');
     // Clear old static seed flag so old data is replaced
     await kvSet(db, 'state_parks_seeded', '0');
   } catch (error) {
