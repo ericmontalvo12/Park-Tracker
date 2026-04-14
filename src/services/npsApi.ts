@@ -8,12 +8,73 @@ const NPS_API_KEY =
 const NPS_BASE_URL = 'https://developer.nps.gov/api/v1';
 const SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-// Only the 63 congressionally-designated National Parks.
-// "National Park & Preserve" covers parks like Denali, Wrangell-St. Elias, etc.
-// that are counted in the official 63.
-const NATIONAL_PARK_DESIGNATIONS = new Set([
-  'National Park',
-  'National Park & Preserve',
+// The 63 congressionally-designated National Parks by official NPS park code.
+// Using park codes instead of designation strings avoids mismatches caused by
+// API variations (e.g. "National Park and Preserve" vs "National Park & Preserve").
+const OFFICIAL_63_PARK_CODES = new Set([
+  'acad', // Acadia
+  'amsa', // National Park of American Samoa
+  'arch', // Arches
+  'badl', // Badlands
+  'bibe', // Big Bend
+  'bisc', // Biscayne
+  'blca', // Black Canyon of the Gunnison
+  'brca', // Bryce Canyon
+  'cany', // Canyonlands
+  'care', // Capitol Reef
+  'cave', // Carlsbad Caverns
+  'chis', // Channel Islands
+  'cong', // Congaree
+  'crla', // Crater Lake
+  'cuva', // Cuyahoga Valley
+  'deva', // Death Valley
+  'dena', // Denali
+  'drto', // Dry Tortugas
+  'ever', // Everglades
+  'gaar', // Gates of the Arctic
+  'jeff', // Gateway Arch
+  'glac', // Glacier
+  'glba', // Glacier Bay
+  'grca', // Grand Canyon
+  'grte', // Grand Teton
+  'grba', // Great Basin
+  'grsa', // Great Sand Dunes
+  'grsm', // Great Smoky Mountains
+  'gumo', // Guadalupe Mountains
+  'hale', // Haleakalā
+  'havo', // Hawaiʻi Volcanoes
+  'hosp', // Hot Springs
+  'indu', // Indiana Dunes
+  'isro', // Isle Royale
+  'jotr', // Joshua Tree
+  'katm', // Katmai
+  'kefj', // Kenai Fjords
+  'kica', // Kings Canyon
+  'kova', // Kobuk Valley
+  'lacl', // Lake Clark
+  'lavo', // Lassen Volcanic
+  'maca', // Mammoth Cave
+  'meve', // Mesa Verde
+  'mora', // Mount Rainier
+  'neri', // New River Gorge
+  'noca', // North Cascades
+  'olym', // Olympic
+  'pefo', // Petrified Forest
+  'pinn', // Pinnacles
+  'redw', // Redwood
+  'romo', // Rocky Mountain
+  'sagu', // Saguaro
+  'sequ', // Sequoia
+  'shen', // Shenandoah
+  'thro', // Theodore Roosevelt
+  'viis', // Virgin Islands
+  'voya', // Voyageurs
+  'whsa', // White Sands
+  'wica', // Wind Cave
+  'wrst', // Wrangell-St. Elias
+  'yell', // Yellowstone
+  'yose', // Yosemite
+  'zion', // Zion
 ]);
 
 interface NpsApiPark {
@@ -55,20 +116,20 @@ async function fetchNpsPage(start: number, limit: number): Promise<NpsApiPark[]>
 
 export async function syncNpsParks(db: SQLite.SQLiteDatabase): Promise<void> {
   // v2 cache key forces a re-sync after the outdoor-only filter was added
-  const lastSync = await kvGet(db, 'nps_last_sync_v3');
+  const lastSync = await kvGet(db, 'nps_last_sync_v4');
   if (lastSync && Date.now() - parseInt(lastSync, 10) < SYNC_INTERVAL_MS) {
     return; // Still fresh
   }
 
   try {
     const allParks = await fetchNpsPage(0, 500);
-    const nationalParks = allParks.filter(p => NATIONAL_PARK_DESIGNATIONS.has(p.designation));
+    const nationalParks = allParks.filter(p => OFFICIAL_63_PARK_CODES.has(p.parkCode));
     const normalized = nationalParks.map(normalizeNpsPark);
 
     // Delete all NPS rows first so stale non-park entries don't linger.
     await db.runAsync("DELETE FROM parks WHERE source = 'nps'");
     await batchUpsertParks(db, normalized);
-    await kvSet(db, 'nps_last_sync_v3', Date.now().toString());
+    await kvSet(db, 'nps_last_sync_v4', Date.now().toString());
   } catch (error) {
     console.warn('NPS sync failed, using cached data:', error);
   }
