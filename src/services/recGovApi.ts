@@ -167,10 +167,13 @@ export async function syncRecGovStateParks(
     return;
   }
 
-  const alreadySynced = await kvGet(db, 'recgov_state_parks_synced_v4');
+  const alreadySynced = await kvGet(db, 'recgov_state_parks_synced_v5');
   if (alreadySynced === '1') return;
 
   try {
+    // Wipe all existing state-park records so stale/filtered entries don't linger.
+    await db.runAsync("DELETE FROM parks WHERE source = 'state'");
+
     for (let i = 0; i < US_STATE_CODES.length; i++) {
       const stateCode = US_STATE_CODES[i];
       onProgress?.(stateCode, i, US_STATE_CODES.length);
@@ -185,7 +188,7 @@ export async function syncRecGovStateParks(
       }
     }
 
-    await kvSet(db, 'recgov_state_parks_synced_v4', '1');
+    await kvSet(db, 'recgov_state_parks_synced_v5', '1');
     // Clear old static seed flag so old data is replaced
     await kvSet(db, 'state_parks_seeded', '0');
   } catch (error) {
