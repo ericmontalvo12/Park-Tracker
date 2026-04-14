@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -8,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import { useSQLiteContext } from 'expo-sqlite';
 import { Colors } from '../../constants/colors';
 import { useStats } from '../../hooks/useStats';
 import { US_STATES } from '../../constants/designations';
@@ -38,7 +40,19 @@ const progressStyles = StyleSheet.create({
 export default function StatsScreen() {
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
+  const db = useSQLiteContext();
   const { stats, loading, refresh } = useStats();
+
+  const exportToConsole = async () => {
+    const rows = await db.getAllAsync<{ full_name: string; state_codes: string; designation: string }>(
+      "SELECT full_name, state_codes, designation FROM parks WHERE source='state' ORDER BY state_codes, full_name"
+    );
+    console.log('=== STATE PARKS EXPORT ===');
+    console.log(`Total: ${rows.length}`);
+    console.log(JSON.stringify(rows, null, 2));
+    console.log('=== END EXPORT ===');
+    Alert.alert('Exported!', `${rows.length} state parks logged to Metro console.`);
+  };
 
   useFocusEffect(
     React.useCallback(() => {
@@ -136,6 +150,16 @@ export default function StatsScreen() {
           )}
         </TouchableOpacity>
       )}
+
+      {/* DEV ONLY — tap to dump all state parks to Metro console */}
+      <TouchableOpacity
+        style={[styles.exportBtn, { borderColor: colors.border }]}
+        onPress={exportToConsole}
+      >
+        <Text style={[styles.exportText, { color: colors.textMuted }]}>
+          Export State Parks to Console
+        </Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -224,6 +248,17 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   recentDate: {
+    fontSize: 13,
+  },
+  exportBtn: {
+    marginTop: 8,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+  },
+  exportText: {
     fontSize: 13,
   },
 });
