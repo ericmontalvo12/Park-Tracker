@@ -30,21 +30,18 @@ const NATIONAL: BadgeDefinition[] = [
     emoji: '💎',
     name: 'Grand Slam',
     description: 'Visit Grand Canyon, Yellowstone, Yosemite & Glacier',
-    secret: true,
   },
   {
     id: 'desert_quad',
     emoji: '🌵',
     name: 'Desert Quad',
     description: 'Visit Death Valley, Joshua Tree, Saguaro & Petrified Forest',
-    secret: true,
   },
   {
     id: 'alaska_pack',
     emoji: '🐺',
     name: 'Alaska Pack',
     description: 'Visit Denali, Glacier Bay, Katmai & Wrangell-St. Elias',
-    secret: true,
   },
   {
     id: 'alaska_wild',
