@@ -59,6 +59,23 @@ function inferDesignation(name: string): string {
   return 'Recreation Area';
 }
 
+// Designations already covered by the NPS API sync — skip RecGov duplicates.
+const NPS_COVERED_DESIGNATIONS = new Set([
+  'National Park',
+  'National Monument',
+  'National Recreation Area',
+  'National Preserve',
+  'National Seashore',
+  'National Lakeshore',
+  'National Parkway',
+  'National Battlefield',
+  'National Military Park',
+  'National Scenic Trail',
+  'National Historic Trail',
+  'National Volcanic Monument',
+  'National Reserve',
+]);
+
 // Sub-facility keywords — these are individual features within a park,
 // not destinations worth tracking on their own.
 const SUB_FACILITY_PATTERNS = [
@@ -94,6 +111,12 @@ function normalizeRecArea(raw: RecGovRecArea, stateCode: string): Park | null {
     return null;
   }
 
+  // Skip NPS-managed parks — they're already in the database from the NPS sync.
+  const designation = inferDesignation(raw.RecAreaName);
+  if (NPS_COVERED_DESIGNATIONS.has(designation)) {
+    return null;
+  }
+
   const primaryImage = raw.MEDIA?.find(m => m.IsPrimary)?.URL
     ?? raw.MEDIA?.[0]?.URL
     ?? null;
@@ -106,7 +129,7 @@ function normalizeRecArea(raw: RecGovRecArea, stateCode: string): Park | null {
     stateCodes: stateCode,
     latitude: raw.RecAreaLatitude,
     longitude: raw.RecAreaLongitude,
-    designation: inferDesignation(raw.RecAreaName),
+    designation,
     imageUrl: primaryImage,
     rawJson: JSON.stringify(raw),
     lastSynced: Date.now(),
@@ -144,7 +167,7 @@ export async function syncRecGovStateParks(
     return;
   }
 
-  const alreadySynced = await kvGet(db, 'recgov_state_parks_synced_v3');
+  const alreadySynced = await kvGet(db, 'recgov_state_parks_synced_v4');
   if (alreadySynced === '1') return;
 
   try {
@@ -162,7 +185,7 @@ export async function syncRecGovStateParks(
       }
     }
 
-    await kvSet(db, 'recgov_state_parks_synced_v3', '1');
+    await kvSet(db, 'recgov_state_parks_synced_v4', '1');
     // Clear old static seed flag so old data is replaced
     await kvSet(db, 'state_parks_seeded', '0');
   } catch (error) {
