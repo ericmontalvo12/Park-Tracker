@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { FlatList, StyleSheet, useColorScheme, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -18,7 +18,7 @@ export default function VisitedScreen() {
   const [visitMap, setVisitMap] = useState<Record<string, Visit>>({});
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     const [visitedParks, allVisits] = await Promise.all([
       getVisitedParks(db),
@@ -29,13 +29,13 @@ export default function VisitedScreen() {
     setParks(visitedParks);
     setVisitMap(map);
     setLoading(false);
-  };
+  }, [db]);
 
   // Reload whenever this tab comes into focus (e.g. after marking visited on detail screen)
   useFocusEffect(
     React.useCallback(() => {
       load();
-    }, [db])
+    }, [load])
   );
 
   return (

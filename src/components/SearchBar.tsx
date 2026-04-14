@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useColorScheme } from '../hooks/use-color-scheme';
 import { Colors } from '../constants/colors';
 
@@ -38,9 +38,10 @@ export function SearchBar({ value, onChangeText, placeholder = 'Search parks…'
         returnKeyType="search"
         clearButtonMode="while-editing"
       />
-      {local.length > 0 && (
+      {/* Android doesn't support clearButtonMode so we render a manual ✕ button */}
+      {Platform.OS === 'android' && local.length > 0 && (
         <TouchableOpacity onPress={() => handleChange('')} style={styles.clear}>
-          {/* iOS has clearButtonMode but Android doesn't — manual clear button */}
+          <Text style={[styles.clearText, { color: colors.textMuted }]}>✕</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -63,5 +64,8 @@ const styles = StyleSheet.create({
   },
   clear: {
     padding: 4,
+  },
+  clearText: {
+    fontSize: 14,
   },
 });

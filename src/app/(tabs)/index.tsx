@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -46,11 +46,22 @@ export default function BrowseScreen() {
     setSelectedState(null);
   };
 
-  const loadVisit = async (parkId: string) => {
-    if (parkId in visitCache) return;
-    const visit = await getVisit(db, parkId);
-    setVisitCache(prev => ({ ...prev, [parkId]: visit }));
-  };
+  // Batch-load visit status whenever the visible parks list changes.
+  // Calling async functions inside renderItem causes DB queries on every re-render.
+  useEffect(() => {
+    const missing = parks.filter(p => !(p.id in visitCache));
+    if (missing.length === 0) return;
+    Promise.all(missing.map(p => getVisit(db, p.id).then(v => ({ id: p.id, v }))))
+      .then(results => {
+        setVisitCache(prev => {
+          const next = { ...prev };
+          results.forEach(({ id, v }) => { next[id] = v; });
+          return next;
+        });
+      });
+  // visitCache intentionally omitted — only re-fetch when the parks list changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parks, db]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -134,16 +145,13 @@ export default function BrowseScreen() {
       <FlatList
         data={parks}
         keyExtractor={item => item.id}
-        renderItem={({ item }) => {
-          loadVisit(item.id);
-          return (
-            <ParkCard
-              park={item}
-              visit={visitCache[item.id] ?? null}
-              onPress={() => router.push(`/park/${item.id}`)}
-            />
-          );
-        }}
+        renderItem={({ item }) => (
+          <ParkCard
+            park={item}
+            visit={visitCache[item.id] ?? null}
+            onPress={() => router.push(`/park/${item.id}`)}
+          />
+        )}
         onEndReached={loadMore}
         onEndReachedThreshold={0.3}
         onRefresh={refresh}

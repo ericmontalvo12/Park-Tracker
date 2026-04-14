@@ -33,7 +33,9 @@ function StarRating({ rating, onRate }: { rating: number | null; onRate: (r: num
 }
 
 export default function ParkDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string }>();
+  // useLocalSearchParams can return string | string[] — normalise to string
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
   const db = useSQLiteContext();
@@ -47,10 +49,13 @@ export default function ParkDetailScreen() {
   const { photos, addNewPhoto, removePhoto } = usePhotos(id);
 
   useEffect(() => {
-    getParkById(db, id).then(p => {
-      setPark(p);
-      if (p) navigation.setOptions({ title: p.fullName });
-    });
+    if (!id) return;
+    getParkById(db, id)
+      .then(p => {
+        setPark(p);
+        if (p) navigation.setOptions({ title: p.fullName });
+      })
+      .catch(err => console.warn('Failed to load park:', err));
   }, [db, id]);
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   Alert,
   StyleSheet,
@@ -33,19 +33,21 @@ export default function MapScreen() {
   const [visitedIds, setVisitedIds] = useState<Set<string>>(new Set());
   const [region, setRegion] = useState<Region>(INITIAL_REGION);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const ids = await getVisitedParkIds(db);
     setVisitedIds(new Set(ids));
     if (ids.length > 0) {
       const parks = await searchParks(db, '', 'all', null, 500, 0);
       setVisitedParks(parks.filter(p => ids.includes(p.id) && p.latitude && p.longitude));
+    } else {
+      setVisitedParks([]);
     }
-  };
+  }, [db]);
 
   useFocusEffect(
     React.useCallback(() => {
       load();
-    }, [db])
+    }, [load])
   );
 
   const goToMyLocation = async () => {
