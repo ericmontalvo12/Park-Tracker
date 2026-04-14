@@ -4,7 +4,7 @@ import { batchUpsertParks } from '../db/parks';
 import { Park } from '../types';
 
 const SPARQL_ENDPOINT = 'https://query.wikidata.org/sparql';
-const CACHE_KEY = 'wikidata_state_parks_v2'; // bumped — query + dedup fixes
+const CACHE_KEY = 'wikidata_state_parks_v3'; // bumped — added image fetch
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // Fetches all US entities of a given Wikidata type (e.g. Q179049 = state park).
@@ -22,6 +22,7 @@ interface WDBinding {
   parkLabel:  { value: string };
   coord?:     { value: string };
   stateAbbr?: { value: string };
+  image?:     { value: string };
 }
 
 // Two-hop P131 lookup (park → [county →] state) so parks filed under a county
@@ -29,10 +30,11 @@ interface WDBinding {
 // extra level rather than using unbounded wdt:P131+.
 function buildQuery(qid: string): string {
   return `
-SELECT DISTINCT ?park ?parkLabel ?coord ?stateAbbr WHERE {
+SELECT DISTINCT ?park ?parkLabel ?coord ?stateAbbr ?image WHERE {
   ?park wdt:P31/wdt:P279* wd:${qid} .
   ?park wdt:P17 wd:Q30 .
   OPTIONAL { ?park wdt:P625 ?coord . }
+  OPTIONAL { ?park wdt:P18 ?image . }
   OPTIONAL {
     {
       ?park wdt:P131 ?loc .
@@ -92,6 +94,10 @@ async function fetchParksOfType(
     // Prefer entries that have a state code over those without.
     if (existing && existing.stateCodes && !stateCode) continue;
 
+    // wdt:P18 returns a Wikimedia Commons URI usable directly as an image URL.
+    // e.g. http://commons.wikimedia.org/wiki/Special:FilePath/Park.jpg
+    const imageUrl = b.image?.value ?? existing?.imageUrl ?? null;
+
     parkMap.set(id, {
       id,
       source: 'state',
@@ -101,7 +107,7 @@ async function fetchParksOfType(
       latitude: coords.lat,
       longitude: coords.lon,
       designation,
-      imageUrl: null,
+      imageUrl,
       rawJson: '',
       lastSynced: Date.now(),
     });
