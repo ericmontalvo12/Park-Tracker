@@ -45,6 +45,14 @@ export async function updateVisitRating(
   await db.runAsync('UPDATE visits SET rating = ? WHERE park_id = ?', [rating, parkId]);
 }
 
+export async function updateVisitDate(
+  db: SQLite.SQLiteDatabase,
+  parkId: string,
+  visitedAt: number
+): Promise<void> {
+  await db.runAsync('UPDATE visits SET visited_at = ? WHERE park_id = ?', [visitedAt, parkId]);
+}
+
 export async function getAllVisits(db: SQLite.SQLiteDatabase): Promise<Visit[]> {
   const rows = await db.getAllAsync<any>('SELECT * FROM visits ORDER BY visited_at DESC');
   return rows.map(rowToVisit);

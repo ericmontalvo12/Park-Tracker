@@ -7,6 +7,7 @@ import {
   removeVisit,
   updateVisitNotes,
   updateVisitRating,
+  updateVisitDate,
   getAllVisits,
 } from '../db/visits';
 import { evaluateBadges } from '../services/badgeEvaluator';
@@ -60,7 +61,12 @@ export function useVisit(parkId: string) {
     }
   }, [db, parkId, notify]);
 
-  return { visit, loading, toggle, saveNotes, saveRating };
+  const saveVisitDate = useCallback(async (timestamp: number) => {
+    await updateVisitDate(db, parkId, timestamp);
+    setVisit(prev => prev ? { ...prev, visitedAt: timestamp } : prev);
+  }, [db, parkId]);
+
+  return { visit, loading, toggle, saveNotes, saveRating, saveVisitDate };
 }
 
 export function useAllVisits() {

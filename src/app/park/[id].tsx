@@ -15,6 +15,7 @@ import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { Colors } from '../../constants/colors';
 import { PhotoGrid } from '../../components/PhotoGrid';
+import { DatePickerModal } from '../../components/DatePickerModal';
 import { useVisit } from '../../hooks/useVisits';
 import { usePhotos } from '../../hooks/usePhotos';
 import { getParkById } from '../../db/parks';
@@ -44,8 +45,9 @@ export default function ParkDetailScreen() {
   const [park, setPark] = useState<Park | null>(null);
   const [descExpanded, setDescExpanded] = useState(false);
   const [notes, setNotes] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const { visit, loading: visitLoading, toggle, saveNotes, saveRating } = useVisit(id);
+  const { visit, loading: visitLoading, toggle, saveNotes, saveRating, saveVisitDate } = useVisit(id);
   const { photos, addNewPhoto, removePhoto } = usePhotos(id);
 
   useEffect(() => {
@@ -154,6 +156,21 @@ export default function ParkDetailScreen() {
           </Text>
         </TouchableOpacity>
 
+        {/* Visit date (only when visited) */}
+        {visit && (
+          <TouchableOpacity
+            style={[styles.dateRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={() => setShowDatePicker(true)}
+          >
+            <Text style={[styles.dateLabel, { color: colors.textSecondary }]}>📅 Visit Date</Text>
+            <Text style={[styles.dateValue, { color: colors.tint }]}>
+              {new Date(visit.visitedAt).toLocaleDateString('en-US', {
+                month: 'short', day: 'numeric', year: 'numeric',
+              })}
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {/* Rating (only when visited) */}
         {visit && (
           <View style={styles.section}>
@@ -245,6 +262,18 @@ export default function ParkDetailScreen() {
           />
         </View>
       </View>
+
+      {visit && (
+        <DatePickerModal
+          visible={showDatePicker}
+          initialDate={new Date(visit.visitedAt)}
+          onConfirm={(date) => {
+            saveVisitDate(date.getTime());
+            setShowDatePicker(false);
+          }}
+          onCancel={() => setShowDatePicker(false)}
+        />
+      )}
     </ScrollView>
   );
 }
@@ -370,5 +399,23 @@ const styles = StyleSheet.create({
   },
   photosSection: {
     marginHorizontal: -16,
+  },
+  dateRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  dateLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  dateValue: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
