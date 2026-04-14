@@ -59,10 +59,38 @@ function inferDesignation(name: string): string {
   return 'Recreation Area';
 }
 
+// Sub-facility keywords — these are individual features within a park,
+// not destinations worth tracking on their own.
+const SUB_FACILITY_PATTERNS = [
+  /\btrail$/i,
+  /\btrailhead\b/i,
+  /\bcampground\b/i,
+  /\bcamp\s*site/i,
+  /\bpicnic\s*area\b/i,
+  /\bboat\s*launch\b/i,
+  /\bboat\s*ramp\b/i,
+  /\bparking\s*area\b/i,
+  /\bvisitor\s*center\b/i,
+  /\bday\s*use\s*area\b/i,
+  /\bgroup\s*camp\b/i,
+  /\bequestrian\s*camp/i,
+  /\bfire\s*lookout\b/i,
+  /\bprimitive\s*camp/i,
+];
+
+function isSubFacility(name: string): boolean {
+  return SUB_FACILITY_PATTERNS.some(re => re.test(name));
+}
+
 function normalizeRecArea(raw: RecGovRecArea, stateCode: string): Park | null {
   // Skip entries with no coordinates
   if (!raw.RecAreaLatitude || !raw.RecAreaLongitude ||
       raw.RecAreaLatitude === 0 || raw.RecAreaLongitude === 0) {
+    return null;
+  }
+
+  // Skip individual trails, campgrounds, picnic areas, etc.
+  if (isSubFacility(raw.RecAreaName)) {
     return null;
   }
 
@@ -116,7 +144,7 @@ export async function syncRecGovStateParks(
     return;
   }
 
-  const alreadySynced = await kvGet(db, 'recgov_state_parks_synced_v2');
+  const alreadySynced = await kvGet(db, 'recgov_state_parks_synced_v3');
   if (alreadySynced === '1') return;
 
   try {
@@ -134,7 +162,7 @@ export async function syncRecGovStateParks(
       }
     }
 
-    await kvSet(db, 'recgov_state_parks_synced_v2', '1');
+    await kvSet(db, 'recgov_state_parks_synced_v3', '1');
     // Clear old static seed flag so old data is replaced
     await kvSet(db, 'state_parks_seeded', '0');
   } catch (error) {
