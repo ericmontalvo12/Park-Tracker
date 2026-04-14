@@ -3,7 +3,8 @@ import { Park } from '../types';
 import { batchUpsertParks } from '../db/parks';
 import { kvGet, kvSet } from '../db/client';
 
-const NPS_API_KEY = process.env.EXPO_PUBLIC_NPS_API_KEY ?? 'DEMO_KEY';
+const NPS_API_KEY =
+  process.env.EXPO_PUBLIC_NPS_API_KEY ?? 'RZY4aIrQ5963UKF6M8Yde34McZDrHWqcZtnE3IdA';
 const NPS_BASE_URL = 'https://developer.nps.gov/api/v1';
 const SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 

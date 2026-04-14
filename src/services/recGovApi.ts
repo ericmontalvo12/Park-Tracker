@@ -4,7 +4,8 @@ import { batchUpsertParks } from '../db/parks';
 import { kvGet, kvSet } from '../db/client';
 
 const RECGOV_BASE_URL = 'https://ridb.recreation.gov/api/v1';
-const RECGOV_API_KEY = process.env.EXPO_PUBLIC_RECGOV_API_KEY ?? '';
+const RECGOV_API_KEY =
+  process.env.EXPO_PUBLIC_RECGOV_API_KEY ?? '5254d6dc-a904-48e0-86a5-decec7d77dfa';
 
 // All US state codes to fetch parks for
 const US_STATE_CODES = [
