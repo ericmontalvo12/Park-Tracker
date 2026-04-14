@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   Alert,
   ScrollView,
@@ -13,6 +13,8 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { Colors } from '../../constants/colors';
 import { useStats } from '../../hooks/useStats';
 import { US_STATES } from '../../constants/designations';
+import { BADGES, BADGE_MAP } from '../../constants/badges';
+import { getEarnedBadges, EarnedBadge } from '../../db/badges';
 
 function ProgressBar({ value, total, color }: { value: number; total: number; color: string }) {
   const pct = total > 0 ? Math.min(value / total, 1) : 0;
@@ -42,6 +44,19 @@ export default function StatsScreen() {
   const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
   const db = useSQLiteContext();
   const { stats, loading, refresh } = useStats();
+  const [earnedBadges, setEarnedBadges] = useState<EarnedBadge[]>([]);
+
+  const loadBadges = useCallback(async () => {
+    const badges = await getEarnedBadges(db);
+    setEarnedBadges(badges);
+  }, [db]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+      loadBadges();
+    }, [refresh, loadBadges])
+  );
 
   const exportToConsole = async () => {
     const rows = await db.getAllAsync<{ full_name: string; state_codes: string; designation: string }>(
@@ -53,12 +68,6 @@ export default function StatsScreen() {
     console.log('=== END EXPORT ===');
     Alert.alert('Exported!', `${rows.length} state parks logged to Metro console.`);
   };
-
-  useFocusEffect(
-    React.useCallback(() => {
-      refresh();
-    }, [refresh])
-  );
 
   if (loading || !stats) {
     return (
@@ -150,6 +159,45 @@ export default function StatsScreen() {
           )}
         </TouchableOpacity>
       )}
+
+      {/* Badges */}
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Text style={[styles.cardTitle, { color: colors.text }]}>
+          Badges ({earnedBadges.length}/{BADGES.length})
+        </Text>
+        <View style={styles.badgeGrid}>
+          {BADGES.map(badge => {
+            const earned = earnedBadges.find(e => e.badgeId === badge.id);
+            return (
+              <TouchableOpacity
+                key={badge.id}
+                style={[
+                  styles.badgeCell,
+                  {
+                    backgroundColor: earned ? colors.tintLight : colors.surface,
+                    borderColor: earned ? colors.tint : colors.border,
+                    opacity: badge.secret && !earned ? 0 : 1,
+                  },
+                ]}
+                activeOpacity={0.7}
+                onPress={() => {
+                  if (badge.secret && !earned) return;
+                  Alert.alert(
+                    `${badge.emoji} ${badge.name}`,
+                    badge.description + (earned
+                      ? `\n\nEarned ${new Date(earned.earnedAt).toLocaleDateString()}`
+                      : '\n\nNot yet earned')
+                  );
+                }}
+              >
+                <Text style={[styles.badgeEmoji, { opacity: earned ? 1 : 0.3 }]}>
+                  {badge.secret && !earned ? '🔒' : badge.emoji}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
 
       {/* DEV ONLY — tap to dump all state parks to Metro console */}
       <TouchableOpacity
@@ -249,6 +297,22 @@ const styles = StyleSheet.create({
   },
   recentDate: {
     fontSize: 13,
+  },
+  badgeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  badgeCell: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeEmoji: {
+    fontSize: 26,
   },
   exportBtn: {
     marginTop: 8,

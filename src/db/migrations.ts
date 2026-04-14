@@ -43,4 +43,13 @@ export const migrations = [
       );
     `,
   },
+  {
+    version: 2,
+    sql: `
+      CREATE TABLE IF NOT EXISTS earned_badges (
+        badge_id  TEXT PRIMARY KEY,
+        earned_at INTEGER NOT NULL
+      );
+    `,
+  },
 ];

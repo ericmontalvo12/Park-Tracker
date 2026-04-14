@@ -1,26 +1,43 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { SQLiteProvider } from 'expo-sqlite';
 import { Stack } from 'expo-router';
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { StyleSheet, Text, useColorScheme, View } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { initDatabase } from '../db/client';
 import { syncNpsParks } from '../services/npsApi';
 import { syncStateParksfromWikidata } from '../services/wikidataApi';
 import { Colors } from '../constants/colors';
+import { BadgeToast } from '../components/BadgeToast';
+import { BadgeDefinition } from '../constants/badges';
 
 SplashScreen.preventAutoHideAsync();
 
-// Broadcast a counter that increments whenever a sync finishes so
-// any screen that cares can re-fetch its data.
+// ── Sync signal — increments after each sync so screens auto-refresh ──────────
 export const SyncSignalContext = createContext(0);
 export function useSyncSignal() { return useContext(SyncSignalContext); }
+
+// ── Badge context — queue of newly earned badges to show as toasts ────────────
+interface BadgeContextValue {
+  notify: (badges: BadgeDefinition[]) => void;
+}
+export const BadgeContext = createContext<BadgeContextValue>({ notify: () => {} });
+export function useBadgeNotifier() { return useContext(BadgeContext); }
 
 function AppInitializer({ children }: { children: React.ReactNode }) {
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [syncSignal, setSyncSignal] = useState(0);
+
+  // Badge toast queue
+  const [badgeQueue, setBadgeQueue] = useState<BadgeDefinition[]>([]);
+  const notify = useCallback((badges: BadgeDefinition[]) => {
+    setBadgeQueue(prev => [...prev, ...badges]);
+  }, []);
+  const dismissFirst = useCallback(() => {
+    setBadgeQueue(prev => prev.slice(1));
+  }, []);
 
   return (
     <SQLiteProvider
@@ -44,13 +61,21 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
           });
       }}
     >
-      <SyncSignalContext.Provider value={syncSignal}>
-        {children}
-      </SyncSignalContext.Provider>
+      <BadgeContext.Provider value={{ notify }}>
+        <SyncSignalContext.Provider value={syncSignal}>
+          {children}
+        </SyncSignalContext.Provider>
+      </BadgeContext.Provider>
+
       {syncMessage && (
         <View style={[styles.syncBanner, { backgroundColor: colors.tint }]}>
           <Text style={styles.syncText}>{syncMessage}</Text>
         </View>
+      )}
+
+      {/* Show one badge toast at a time from the queue */}
+      {badgeQueue.length > 0 && (
+        <BadgeToast badge={badgeQueue[0]} onDismiss={dismissFirst} />
       )}
     </SQLiteProvider>
   );
