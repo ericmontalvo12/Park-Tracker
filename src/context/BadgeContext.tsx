@@ -27,7 +27,7 @@ export function BadgeProvider({ children }: { children: React.ReactNode }) {
     <BadgeContext.Provider value={{ notify }}>
       {children}
       {queue.length > 0 && (
-        <BadgeToast badge={queue[0]} onDismiss={dismissFirst} />
+        <BadgeToast key={queue[0].id} badge={queue[0]} onDismiss={dismissFirst} />
       )}
     </BadgeContext.Provider>
   );
