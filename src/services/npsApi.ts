@@ -116,20 +116,23 @@ async function fetchNpsPage(start: number, limit: number): Promise<NpsApiPark[]>
 
 export async function syncNpsParks(db: SQLite.SQLiteDatabase): Promise<void> {
   // v2 cache key forces a re-sync after the outdoor-only filter was added
-  const lastSync = await kvGet(db, 'nps_last_sync_v4');
+  const lastSync = await kvGet(db, 'nps_last_sync_v5');
   if (lastSync && Date.now() - parseInt(lastSync, 10) < SYNC_INTERVAL_MS) {
     return; // Still fresh
   }
 
   try {
     const allParks = await fetchNpsPage(0, 500);
+    const foundCodes = new Set(allParks.map(p => p.parkCode));
+    const missingCodes = [...OFFICIAL_63_PARK_CODES].filter(c => !foundCodes.has(c));
+    if (missingCodes.length) console.warn('[NPS] Park codes not found in API:', missingCodes);
     const nationalParks = allParks.filter(p => OFFICIAL_63_PARK_CODES.has(p.parkCode));
     const normalized = nationalParks.map(normalizeNpsPark);
 
     // Delete all NPS rows first so stale non-park entries don't linger.
     await db.runAsync("DELETE FROM parks WHERE source = 'nps'");
     await batchUpsertParks(db, normalized);
-    await kvSet(db, 'nps_last_sync_v4', Date.now().toString());
+    await kvSet(db, 'nps_last_sync_v5', Date.now().toString());
   } catch (error) {
     console.warn('NPS sync failed, using cached data:', error);
   }
