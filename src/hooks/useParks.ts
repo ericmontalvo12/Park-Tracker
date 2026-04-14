@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useSQLiteContext } from 'expo-sqlite';
 import { Park } from '../types';
 import { searchParks } from '../db/parks';
+import { useSyncSignal } from '../app/_layout';
 
 export type SourceFilter = 'all' | 'nps' | 'state';
 
@@ -11,6 +12,7 @@ export function useParks(
   stateFilter: string | null
 ) {
   const db = useSQLiteContext();
+  const syncSignal = useSyncSignal();
   const [parks, setParks] = useState<Park[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
@@ -39,9 +41,10 @@ export function useParks(
     [db, query, source, stateFilter]
   );
 
+  // Reload whenever query/source/filter changes OR a sync completes.
   useEffect(() => {
     load(0, true);
-  }, [load]);
+  }, [load, syncSignal]);
 
   const loadMore = useCallback(() => {
     if (!hasMore) return;

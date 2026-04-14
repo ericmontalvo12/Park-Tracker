@@ -1,7 +1,7 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { SQLiteProvider } from 'expo-sqlite';
 import { Stack } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { StyleSheet, Text, useColorScheme, View } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { initDatabase } from '../db/client';
@@ -11,10 +11,16 @@ import { Colors } from '../constants/colors';
 
 SplashScreen.preventAutoHideAsync();
 
+// Broadcast a counter that increments whenever a sync finishes so
+// any screen that cares can re-fetch its data.
+export const SyncSignalContext = createContext(0);
+export function useSyncSignal() { return useContext(SyncSignalContext); }
+
 function AppInitializer({ children }: { children: React.ReactNode }) {
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [syncSignal, setSyncSignal] = useState(0);
 
   return (
     <SQLiteProvider
@@ -22,17 +28,25 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
       onInit={async (db) => {
         await initDatabase(db);
 
-        // Run syncs in background — NPS is fast, RecGov takes longer on first run
-        syncNpsParks(db).catch(console.warn);
+        // Await NPS sync so the 63 national parks are in the DB
+        // before the UI renders — it's a single fast network call.
+        await syncNpsParks(db).catch(console.warn);
+        setSyncSignal(s => s + 1);
+
+        // RecGov crawls all 50 states so keep it in the background.
         syncRecGovStateParks(db, (state, index, total) => {
           setSyncMessage(`Loading state parks… ${state} (${index + 1}/${total})`);
           if (index + 1 === total) {
             setTimeout(() => setSyncMessage(null), 1500);
           }
-        }).catch(console.warn);
+        })
+          .catch(console.warn)
+          .finally(() => setSyncSignal(s => s + 1));
       }}
     >
-      {children}
+      <SyncSignalContext.Provider value={syncSignal}>
+        {children}
+      </SyncSignalContext.Provider>
       {syncMessage && (
         <View style={[styles.syncBanner, { backgroundColor: colors.tint }]}>
           <Text style={styles.syncText}>{syncMessage}</Text>
