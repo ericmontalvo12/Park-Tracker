@@ -23,17 +23,10 @@ export function ParkCard({ park, visit, onPress }: Props) {
 
   return (
     <TouchableOpacity
-      style={[
-        styles.card,
-        { backgroundColor: colors.card, borderColor: visit ? colors.tint : colors.border },
-        visit && { backgroundColor: colors.tintLight },
-      ]}
+      style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
       onPress={onPress}
       activeOpacity={0.7}
     >
-      {/* Green visited stripe on the left edge */}
-      {visit && <View style={[styles.visitedStripe, { backgroundColor: colors.tint }]} />}
-
       <View style={styles.imageContainer}>
         {park.imageUrl ? (
           <Image
@@ -66,11 +59,6 @@ export function ParkCard({ park, visit, onPress }: Props) {
               {park.designation || (park.source === 'nps' ? 'NPS Site' : 'State Park')}
             </Text>
           </View>
-          {visit && (
-            <View style={[styles.visitedPill, { backgroundColor: colors.tint }]}>
-              <Text style={styles.visitedPillText}>Visited</Text>
-            </View>
-          )}
         </View>
         {stateList ? (
           <Text style={[styles.states, { color: colors.textSecondary }]} numberOfLines={1}>
@@ -79,7 +67,7 @@ export function ParkCard({ park, visit, onPress }: Props) {
         ) : null}
         {visit && (
           <Text style={[styles.visitDate, { color: colors.tint }]}>
-            {new Date(visit.visitedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            Visited {new Date(visit.visitedAt).toLocaleDateString()}
           </Text>
         )}
       </View>
@@ -114,38 +102,19 @@ const styles = StyleSheet.create({
   placeholderEmoji: {
     fontSize: 32,
   },
-  visitedStripe: {
-    width: 4,
-    height: CARD_HEIGHT,
-  },
   visitedBadge: {
     position: 'absolute',
     top: 6,
     left: 6,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
   },
   visitedCheck: {
     color: '#fff',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  visitedPill: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  visitedPillText: {
-    color: '#fff',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
   },
   info: {

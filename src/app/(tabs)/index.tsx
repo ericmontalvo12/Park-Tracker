@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, useColorScheme, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { Colors } from '../../constants/colors';
 import { ParkCard } from '../../components/ParkCard';
@@ -46,22 +46,32 @@ export default function BrowseScreen() {
     setSelectedState(null);
   };
 
-  // Batch-load visit status whenever the visible parks list changes.
-  // Calling async functions inside renderItem causes DB queries on every re-render.
+  // Batch-load visit status for the current parks list.
+  const reloadVisitCache = useCallback(async (parkList: typeof parks) => {
+    if (parkList.length === 0) return;
+    const results = await Promise.all(
+      parkList.map(p => getVisit(db, p.id).then(v => ({ id: p.id, v })))
+    );
+    setVisitCache(prev => {
+      const next = { ...prev };
+      results.forEach(({ id, v }) => { next[id] = v; });
+      return next;
+    });
+  }, [db]);
+
+  // Re-fetch when the parks list changes (new search/filter results)
   useEffect(() => {
-    const missing = parks.filter(p => !(p.id in visitCache));
-    if (missing.length === 0) return;
-    Promise.all(missing.map(p => getVisit(db, p.id).then(v => ({ id: p.id, v }))))
-      .then(results => {
-        setVisitCache(prev => {
-          const next = { ...prev };
-          results.forEach(({ id, v }) => { next[id] = v; });
-          return next;
-        });
-      });
-  // visitCache intentionally omitted — only re-fetch when the parks list changes
+    reloadVisitCache(parks);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [parks, db]);
+  }, [parks]);
+
+  // Re-fetch when tab comes back into focus so visits marked elsewhere show up
+  useFocusEffect(
+    useCallback(() => {
+      reloadVisitCache(parks);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [reloadVisitCache])
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
