@@ -49,7 +49,7 @@ const OFFICIAL_63_PARK_CODES = new Set([
   'jotr', // Joshua Tree
   'katm', // Katmai
   'kefj', // Kenai Fjords
-  'seki', // Sequoia & Kings Canyon (NPS API combines both under one entry)
+  'seki', // Sequoia & Kings Canyon (API combines both; split into 2 in normalizeNpsPark)
   'kova', // Kobuk Valley
   'lacl', // Lake Clark
   'lavo', // Lassen Volcanic
@@ -90,20 +90,29 @@ interface NpsApiPark {
   operatingHours: Array<{ name: string; standardHours: Record<string, string> }>;
 }
 
-function normalizeNpsPark(raw: NpsApiPark): Park {
-  return {
-    id: raw.parkCode,
+function normalizeNpsPark(raw: NpsApiPark): Park[] {
+  const base: Omit<Park, 'id' | 'fullName'> = {
     source: 'nps',
-    fullName: raw.fullName,
     description: raw.description,
     stateCodes: raw.states,
     latitude: raw.latitude ? parseFloat(raw.latitude) : null,
     longitude: raw.longitude ? parseFloat(raw.longitude) : null,
-    designation: raw.designation,
+    designation: 'National Park',
     imageUrl: raw.images?.[0]?.url ?? null,
     rawJson: JSON.stringify(raw),
     lastSynced: Date.now(),
   };
+
+  // The NPS API combines Sequoia and Kings Canyon under one entry (seki).
+  // Split it so both appear as distinct parks, matching the official 63 count.
+  if (raw.parkCode === 'seki') {
+    return [
+      { ...base, id: 'sequ', fullName: 'Sequoia National Park' },
+      { ...base, id: 'kica', fullName: 'Kings Canyon National Park' },
+    ];
+  }
+
+  return [{ ...base, id: raw.parkCode, fullName: raw.fullName }];
 }
 
 async function fetchNpsPage(start: number, limit: number): Promise<NpsApiPark[]> {
@@ -116,7 +125,7 @@ async function fetchNpsPage(start: number, limit: number): Promise<NpsApiPark[]>
 
 export async function syncNpsParks(db: SQLite.SQLiteDatabase): Promise<void> {
   // v2 cache key forces a re-sync after the outdoor-only filter was added
-  const lastSync = await kvGet(db, 'nps_last_sync_v6');
+  const lastSync = await kvGet(db, 'nps_last_sync_v7');
   if (lastSync && Date.now() - parseInt(lastSync, 10) < SYNC_INTERVAL_MS) {
     return; // Still fresh
   }
@@ -127,12 +136,12 @@ export async function syncNpsParks(db: SQLite.SQLiteDatabase): Promise<void> {
     const missingCodes = [...OFFICIAL_63_PARK_CODES].filter(c => !foundCodes.has(c));
     if (missingCodes.length) console.warn('[NPS] Park codes not found in API:', missingCodes);
     const nationalParks = allParks.filter(p => OFFICIAL_63_PARK_CODES.has(p.parkCode));
-    const normalized = nationalParks.map(normalizeNpsPark);
+    const normalized = nationalParks.flatMap(normalizeNpsPark);
 
     // Delete all NPS rows first so stale non-park entries don't linger.
     await db.runAsync("DELETE FROM parks WHERE source = 'nps'");
     await batchUpsertParks(db, normalized);
-    await kvSet(db, 'nps_last_sync_v6', Date.now().toString());
+    await kvSet(db, 'nps_last_sync_v7', Date.now().toString());
   } catch (error) {
     console.warn('NPS sync failed, using cached data:', error);
   }
