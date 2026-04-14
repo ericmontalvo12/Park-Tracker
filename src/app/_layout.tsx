@@ -6,7 +6,7 @@ import { StyleSheet, Text, useColorScheme, View } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { initDatabase } from '../db/client';
 import { syncNpsParks } from '../services/npsApi';
-import { syncRecGovStateParks } from '../services/recGovApi';
+import { syncStateParksfromWikidata } from '../services/wikidataApi';
 import { Colors } from '../constants/colors';
 
 SplashScreen.preventAutoHideAsync();
@@ -33,15 +33,15 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
         await syncNpsParks(db).catch(console.warn);
         setSyncSignal(s => s + 1);
 
-        // RecGov crawls all 50 states so keep it in the background.
-        syncRecGovStateParks(db, (state, index, total) => {
-          setSyncMessage(`Loading state parks… ${state} (${index + 1}/${total})`);
-          if (index + 1 === total) {
-            setTimeout(() => setSyncMessage(null), 1500);
-          }
+        // Wikidata queries run per-type so keep them in the background.
+        syncStateParksfromWikidata(db, (msg) => {
+          setSyncMessage(msg);
         })
           .catch(console.warn)
-          .finally(() => setSyncSignal(s => s + 1));
+          .finally(() => {
+            setSyncMessage(null);
+            setSyncSignal(s => s + 1);
+          });
       }}
     >
       <SyncSignalContext.Provider value={syncSignal}>
