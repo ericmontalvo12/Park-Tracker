@@ -4,7 +4,7 @@ import { batchUpsertParks } from '../db/parks';
 import { Park } from '../types';
 
 const OVERPASS_ENDPOINT = 'https://overpass-api.de/api/interpreter';
-const CACHE_KEY = 'osm_state_parks_v4';
+const CACHE_KEY = 'osm_state_parks_v5';
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // Sequential — Overpass rate-limits concurrent requests (429)
@@ -18,15 +18,25 @@ const US_STATE_CODES = [
   'SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
 ];
 
-// Shorter pattern = faster regex in Overpass; relations only (no ways) = less data
 const NAME_PATTERN = 'State Park|State Forest|State Beach|State Recreation Area|State Preserve|State Reserve';
 
+// States whose OSM area polygon is too complex for a fast spatial query.
+// Use a bounding box (south,west,north,east) instead.
+const STATE_BBOX: Record<string, string> = {
+  AK: '51.2,-179.9,71.5,-129.7',
+  HI: '18.9,-160.3,22.2,-154.8',
+};
+
 function buildStateQuery(stateCode: string): string {
+  const bbox = STATE_BBOX[stateCode];
+  const filter = bbox
+    ? `(${bbox})`
+    : `(area.s)`;
+  const areaLine = bbox ? '' : `area["ISO3166-2"="US-${stateCode}"][admin_level=4]->.s;\n`;
   return `[out:json][timeout:45];
-area["ISO3166-2"="US-${stateCode}"][admin_level=4]->.s;
-(
-  relation["boundary"="protected_area"][name~"${NAME_PATTERN}",i](area.s);
-  relation["leisure"="nature_reserve"][name~"${NAME_PATTERN}",i](area.s);
+${areaLine}(
+  relation["boundary"="protected_area"][name~"${NAME_PATTERN}",i]${filter};
+  relation["leisure"="nature_reserve"][name~"${NAME_PATTERN}",i]${filter};
 );
 out center tags;`;
 }
