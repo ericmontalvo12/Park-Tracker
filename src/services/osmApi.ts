@@ -4,7 +4,7 @@ import { batchUpsertParks } from '../db/parks';
 import { Park } from '../types';
 
 const OVERPASS_ENDPOINT = 'https://overpass-api.de/api/interpreter';
-const CACHE_KEY = 'osm_state_parks_v3';
+const CACHE_KEY = 'osm_state_parks_v4';
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // Sequential — Overpass rate-limits concurrent requests (429)
@@ -98,7 +98,10 @@ async function fetchStateParks(stateCode: string): Promise<OsmElement[]> {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body,
       });
-      if (res.status === 429 || res.status === 503) continue; // retry
+      // 504 = server-side timeout — retrying won't help, skip immediately
+      if (res.status === 504) { console.warn(`[OSM] ${stateCode} timeout, skipping`); return []; }
+      // 429/503 = rate limited — wait and retry
+      if (res.status === 429 || res.status === 503) continue;
       if (!res.ok) { console.warn(`[OSM] ${stateCode} HTTP ${res.status}`); return []; }
       const json = await res.json();
       return json.elements ?? [];
