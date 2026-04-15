@@ -4,11 +4,11 @@ import { batchUpsertParks } from '../db/parks';
 import { Park } from '../types';
 
 const OVERPASS_ENDPOINT = 'https://overpass-api.de/api/interpreter';
-const CACHE_KEY = 'osm_state_parks_v2';
+const CACHE_KEY = 'osm_state_parks_v3';
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-// Run 5 states concurrently to balance speed vs. Overpass load
-const BATCH_SIZE = 5;
+// Sequential — Overpass rate-limits concurrent requests (429)
+const DELAY_MS = 1500; // between states
 
 const US_STATE_CODES = [
   'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA',
@@ -18,16 +18,14 @@ const US_STATE_CODES = [
   'SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
 ];
 
-const NAME_PATTERN =
-  'State Park|State Forest|State Beach|State Recreation Area|' +
-  'State Natural Area|State Preserve|State Reserve|State Seashore|State Wilderness';
+// Shorter pattern = faster regex in Overpass; relations only (no ways) = less data
+const NAME_PATTERN = 'State Park|State Forest|State Beach|State Recreation Area|State Preserve|State Reserve';
 
 function buildStateQuery(stateCode: string): string {
-  return `[out:json][timeout:60];
+  return `[out:json][timeout:45];
 area["ISO3166-2"="US-${stateCode}"][admin_level=4]->.s;
 (
   relation["boundary"="protected_area"][name~"${NAME_PATTERN}",i](area.s);
-  way["boundary"="protected_area"][name~"${NAME_PATTERN}",i](area.s);
   relation["leisure"="nature_reserve"][name~"${NAME_PATTERN}",i](area.s);
 );
 out center tags;`;
@@ -90,17 +88,26 @@ function inferDesignation(name: string): string {
 
 async function fetchStateParks(stateCode: string): Promise<OsmElement[]> {
   const query = buildStateQuery(stateCode);
-  const res = await fetch(OVERPASS_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `data=${encodeURIComponent(query)}`,
-  });
-  if (!res.ok) {
-    console.warn(`[OSM] ${stateCode} HTTP ${res.status}`);
-    return [];
+  const body = `data=${encodeURIComponent(query)}`;
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    if (attempt > 1) await new Promise(r => setTimeout(r, attempt * 2000));
+    try {
+      const res = await fetch(OVERPASS_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+      });
+      if (res.status === 429 || res.status === 503) continue; // retry
+      if (!res.ok) { console.warn(`[OSM] ${stateCode} HTTP ${res.status}`); return []; }
+      const json = await res.json();
+      return json.elements ?? [];
+    } catch {
+      // network error — retry
+    }
   }
-  const json = await res.json();
-  return json.elements ?? [];
+  console.warn(`[OSM] ${stateCode} failed after 3 attempts`);
+  return [];
 }
 
 export async function syncStateParksFromOSM(
@@ -115,44 +122,46 @@ export async function syncStateParksFromOSM(
   const seen = new Set<string>();
   let total = 0;
 
-  // Process in batches of BATCH_SIZE states concurrently
-  for (let i = 0; i < US_STATE_CODES.length; i += BATCH_SIZE) {
-    const batch = US_STATE_CODES.slice(i, i + BATCH_SIZE);
-    onProgress?.(`Loading parks… (${batch.join(', ')})`);
+  // Process one state at a time to stay within Overpass rate limits
+  for (let i = 0; i < US_STATE_CODES.length; i++) {
+    const stateCode = US_STATE_CODES[i];
+    onProgress?.(`Loading ${stateCode}… (${i + 1}/${US_STATE_CODES.length})`);
 
-    const results = await Promise.all(batch.map(sc => fetchStateParks(sc)));
-
+    const elements = await fetchStateParks(stateCode);
     const parks: Park[] = [];
-    for (let b = 0; b < batch.length; b++) {
-      const stateCode = batch[b];
-      for (const el of results[b]) {
-        const name = el.tags?.name?.trim();
-        if (!name || !el.center) continue;
 
-        const sc = extractStateCode(el.tags, stateCode);
-        const key = `${name}|${sc}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
+    for (const el of elements) {
+      const name = el.tags?.name?.trim();
+      if (!name || !el.center) continue;
 
-        parks.push({
-          id:          `osm_${el.type[0]}${el.id}`,
-          source:      'state',
-          fullName:    name,
-          description: '',
-          stateCodes:  sc,
-          latitude:    el.center.lat,
-          longitude:   el.center.lon,
-          designation: inferDesignation(name),
-          imageUrl:    null,
-          rawJson:     '',
-          lastSynced:  Date.now(),
-        });
-      }
+      const sc = extractStateCode(el.tags, stateCode);
+      const key = `${name}|${sc}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      parks.push({
+        id:          `osm_${el.type[0]}${el.id}`,
+        source:      'state',
+        fullName:    name,
+        description: '',
+        stateCodes:  sc,
+        latitude:    el.center.lat,
+        longitude:   el.center.lon,
+        designation: inferDesignation(name),
+        imageUrl:    null,
+        rawJson:     '',
+        lastSynced:  Date.now(),
+      });
     }
 
     if (parks.length > 0) await batchUpsertParks(db, parks);
     total += parks.length;
-    console.log(`[OSM] Batch ${batch.join(',')} → +${parks.length} parks (total ${total})`);
+    console.log(`[OSM] ${stateCode} → ${parks.length} parks (total ${total})`);
+
+    // Respect Overpass rate limit between requests
+    if (i < US_STATE_CODES.length - 1) {
+      await new Promise(r => setTimeout(r, DELAY_MS));
+    }
   }
 
   if (total > 0) await kvSet(db, CACHE_KEY, String(Date.now()));
