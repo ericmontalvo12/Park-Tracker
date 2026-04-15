@@ -6,7 +6,7 @@ import { StyleSheet, Text, useColorScheme, View } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { initDatabase } from '../db/client';
 import { syncNpsParks } from '../services/npsApi';
-import { syncStateParksFromPadus } from '../services/padusApi';
+import { syncStateParksFromOSM } from '../services/osmApi';
 import { Colors } from '../constants/colors';
 import { BadgeProvider } from '../context/BadgeContext';
 
@@ -33,8 +33,8 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
         await syncNpsParks(db).catch(console.warn);
         setSyncSignal(s => s + 1);
 
-        // PAD-US queries run per-designation so keep them in the background.
-        syncStateParksFromPadus(db, (msg) => {
+        // OSM Overpass query runs in the background — takes ~30s on first load.
+        syncStateParksFromOSM(db, (msg) => {
           setSyncMessage(msg);
         })
           .catch(console.warn)
