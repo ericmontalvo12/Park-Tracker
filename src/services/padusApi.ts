@@ -37,18 +37,10 @@ async function fetchPage(
   desType: string,
   offset: number
 ): Promise<{ features: PadusFeature[]; hasMore: boolean }> {
-  const params = new URLSearchParams({
-    where:               `Mang_Type='STAT' AND Des_Tp='${desType}'`,
-    outFields:           '*',
-    returnCentroid:      'true',
-    returnGeometry:      'false',
-    outSR:               '4326',
-    resultOffset:        String(offset),
-    resultRecordCount:   String(PAGE_SIZE),
-    f:                   'json',
-  });
-
-  const url = `${PADUS_ENDPOINT}?${params.toString()}`;
+  // Build URL manually — URLSearchParams encodes '=' as %3D and "'" as %27
+  // inside values, which ArcGIS REST rejects with "Invalid URL".
+  const where = encodeURIComponent(`Mang_Type='STAT' AND Des_Tp='${desType}'`);
+  const url = `${PADUS_ENDPOINT}?where=${where}&outFields=*&returnCentroid=true&returnGeometry=false&outSR=4326&resultOffset=${offset}&resultRecordCount=${PAGE_SIZE}&f=json`;
   console.log('[PAD-US] Fetching:', url.slice(0, 120));
 
   const res = await fetch(url, {
