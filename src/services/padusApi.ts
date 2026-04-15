@@ -8,7 +8,7 @@ import { Park } from '../types';
 const PADUS_ENDPOINT =
   'https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/PAD_US3_0/FeatureServer/1/query';
 
-const CACHE_KEY = 'padus_state_parks_v1';
+const CACHE_KEY = 'padus_state_parks_v2'; // bumped for debug run
 const CACHE_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 const PAGE_SIZE = 1000;
 
@@ -39,21 +39,37 @@ async function fetchPage(
 ): Promise<{ features: PadusFeature[]; hasMore: boolean }> {
   const params = new URLSearchParams({
     where:               `Mang_Type='STAT' AND Des_Tp='${desType}'`,
-    outFields:           'Unit_Nm,Des_Tp,State_Nm,Mang_Nm',
+    outFields:           '*',
     returnCentroid:      'true',
+    returnGeometry:      'false',
     outSR:               '4326',
     resultOffset:        String(offset),
     resultRecordCount:   String(PAGE_SIZE),
     f:                   'json',
   });
 
-  const res = await fetch(`${PADUS_ENDPOINT}?${params.toString()}`, {
+  const url = `${PADUS_ENDPOINT}?${params.toString()}`;
+  console.log('[PAD-US] Fetching:', url.slice(0, 120));
+
+  const res = await fetch(url, {
     headers: { Accept: 'application/json' },
   });
   if (!res.ok) throw new Error(`PAD-US HTTP ${res.status}`);
 
   const json = await res.json();
-  if (json.error) throw new Error(`PAD-US error: ${json.error.message}`);
+
+  if (json.error) throw new Error(`PAD-US API error: ${JSON.stringify(json.error)}`);
+
+  // Log first feature so we can verify field names and structure
+  if (offset === 0 && json.features?.length > 0) {
+    console.log('[PAD-US] First feature sample:', JSON.stringify(json.features[0]));
+    console.log('[PAD-US] Total features in page:', json.features.length);
+    console.log('[PAD-US] exceededTransferLimit:', json.exceededTransferLimit);
+  }
+
+  if (offset === 0 && (!json.features || json.features.length === 0)) {
+    console.warn('[PAD-US] Zero results. Full response:', JSON.stringify(json).slice(0, 500));
+  }
 
   return {
     features: json.features ?? [],
