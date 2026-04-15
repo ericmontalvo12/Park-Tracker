@@ -3,13 +3,12 @@ import { kvGet, kvSet } from '../db/client';
 import { batchUpsertParks } from '../db/parks';
 import { Park } from '../types';
 
-// Multiple public Overpass mirrors — tried in order on failure
 const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
-  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
 ];
-const CACHE_KEY = 'osm_state_parks_v7';
+const FETCH_TIMEOUT_MS = 30_000; // abort if no response in 30s
+const CACHE_KEY = 'osm_state_parks_v8';
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // Sequential — Overpass rate-limits concurrent requests (429)
@@ -117,27 +116,27 @@ async function fetchStateParks(stateCode: string): Promise<OsmElement[]> {
   const query = buildStateQuery(stateCode);
   const body = `data=${encodeURIComponent(query)}`;
 
-  // Try each mirror in sequence; move to next on 504/429
   for (const endpoint of OVERPASS_ENDPOINTS) {
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      if (attempt > 1) await new Promise(r => setTimeout(r, 3000));
-      try {
-        const res = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body,
-        });
-        if (res.status === 504) break;          // timeout on this mirror → try next
-        if (res.status === 429 || res.status === 503) continue; // rate-limited → retry same
-        if (!res.ok) { console.warn(`[OSM] ${stateCode} HTTP ${res.status}`); break; }
-        const json = await res.json();
-        return json.elements ?? [];
-      } catch {
-        // network error — retry
-      }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (res.status === 504 || res.status === 429 || res.status === 503) continue;
+      if (!res.ok) { console.warn(`[OSM] ${stateCode} HTTP ${res.status}`); continue; }
+      const json = await res.json();
+      return json.elements ?? [];
+    } catch {
+      clearTimeout(timer);
+      // timed out or network error — try next mirror
     }
   }
-  console.warn(`[OSM] ${stateCode} failed on all mirrors`);
+  console.warn(`[OSM] ${stateCode} skipped`);
   return [];
 }
 
