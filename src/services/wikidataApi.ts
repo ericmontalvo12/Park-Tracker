@@ -4,7 +4,7 @@ import { batchUpsertParks } from '../db/parks';
 import { Park } from '../types';
 
 const SPARQL_ENDPOINT = 'https://query.wikidata.org/sparql';
-const CACHE_KEY = 'wikidata_state_parks_v4'; // bumped — tightened query to remove NWRs/sanctuaries
+const CACHE_KEY = 'wikidata_state_parks_v5'; // bumped — force re-fetch after PAD-US switch
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // Fetches all US entities of a given Wikidata type (e.g. Q179049 = state park).
