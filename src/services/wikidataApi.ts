@@ -4,7 +4,7 @@ import { batchUpsertParks } from '../db/parks';
 import { Park } from '../types';
 
 const SPARQL_ENDPOINT = 'https://query.wikidata.org/sparql';
-const CACHE_KEY = 'wikidata_state_parks_v6'; // bumped — tightened non-park filters
+const CACHE_KEY = 'wikidata_state_parks_v7'; // bumped — fix empty-cache guard
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // Fetches all US entities of a given Wikidata type (e.g. Q179049 = state park).
@@ -148,6 +148,7 @@ export async function syncStateParksfromWikidata(
   const lastSync = await kvGet(db, CACHE_KEY);
   if (lastSync && Date.now() - parseInt(lastSync) < CACHE_TTL_MS) return;
 
+  console.log('[Wikidata] Starting sync…');
   // Wipe old state park data before fresh sync
   await db.runAsync("DELETE FROM parks WHERE source = 'state'");
 
@@ -164,6 +165,7 @@ export async function syncStateParksfromWikidata(
     }
   }
 
-  await kvSet(db, CACHE_KEY, String(Date.now()));
+  if (total > 0) await kvSet(db, CACHE_KEY, String(Date.now()));
   onProgress?.(`Synced ${total} state parks`);
+  console.log(`[Wikidata] Sync complete. Total parks: ${total}`);
 }
