@@ -28,19 +28,13 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
       onInit={async (db) => {
         await initDatabase(db);
 
-        // Await NPS sync so the 63 national parks are in the DB
-        // before the UI renders — it's a single fast network call.
+        // Await both syncs before the UI renders so all parks are ready.
         await syncNpsParks(db).catch(console.warn);
-        setSyncSignal(s => s + 1);
-
-        syncStateParksfromWikidata(db, (msg) => {
+        await syncStateParksfromWikidata(db, (msg) => {
           setSyncMessage(msg);
-        })
-          .catch(console.warn)
-          .finally(() => {
-            setSyncMessage(null);
-            setSyncSignal(s => s + 1);
-          });
+        }).catch(console.warn);
+        setSyncMessage(null);
+        setSyncSignal(s => s + 1);
       }}
     >
       <BadgeProvider>

@@ -81,11 +81,27 @@ async function fetchParksOfType(
   qid: string
 ): Promise<Park[]> {
   const query = buildQuery(qid);
-  const url = `${SPARQL_ENDPOINT}?query=${encodeURIComponent(query)}&format=json`;
 
-  const res = await fetch(url, {
-    headers: { Accept: 'application/sparql-results+json' },
-  });
+  // Use POST to avoid URL-length limits on long queries.
+  // Add User-Agent — Wikidata throttles requests without one.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 45_000);
+
+  let res: Response;
+  try {
+    res = await fetch(SPARQL_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/sparql-results+json',
+        'User-Agent': 'ParkTrackerApp/1.0 (park-tracker-mobile)',
+      },
+      body: `query=${encodeURIComponent(query)}&format=json`,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) throw new Error(`Wikidata ${res.status}`);
 
   const json = await res.json();
