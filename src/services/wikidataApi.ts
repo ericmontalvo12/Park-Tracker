@@ -4,7 +4,7 @@ import { batchUpsertParks } from '../db/parks';
 import { Park } from '../types';
 
 const SPARQL_ENDPOINT = 'https://query.wikidata.org/sparql';
-const CACHE_KEY = 'wikidata_state_parks_v5'; // bumped — force re-fetch after PAD-US switch
+const CACHE_KEY = 'wikidata_state_parks_v6'; // bumped — tightened non-park filters
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // Fetches all US entities of a given Wikidata type (e.g. Q179049 = state park).
@@ -47,7 +47,7 @@ SELECT DISTINCT ?park ?parkLabel ?coord ?stateAbbr ?image WHERE {
     FILTER(STRSTARTS(?stateAbbr, "US-"))
   }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
-  FILTER(!REGEX(STR(?parkLabel), "National Wildlife Refuge|National Marine Sanctuary|National Park|National Monument|National Preserve|National Recreation Area|Biosphere Reserve|Research Natural Area|Experimental Forest|Experimental Range|Wildlife Management Area|Wildlife Refuge|Marine Reserve|Marine Conservation", "i"))
+  FILTER(!REGEX(STR(?parkLabel), "National Wildlife Refuge|National Marine Sanctuary|National Park|National Monument|National Preserve|National Recreation Area|Biosphere Reserve|Research Natural Area|Experimental Forest|Experimental Range|Wildlife Management Area|Wildlife Refuge|Marine Reserve|Marine Conservation|Historic Site|Historical Site|Heritage Site|Battlefield|Botanical Garden|Arboretum|Cemetery|Museum|Nature Center|State Prison|Correctional", "i"))
 }
 LIMIT 5000`.trim();
 }
@@ -57,6 +57,23 @@ function parseCoord(s: string): { lat: number; lon: number } | null {
   const m = s.match(/Point\(([+-]?\d+\.?\d*)\s([+-]?\d+\.?\d*)\)/);
   if (!m) return null;
   return { lon: parseFloat(m[1]), lat: parseFloat(m[2]) };
+}
+
+// Client-side guard for names that slip past the SPARQL filter.
+// "Memorial State Park" is fine; a standalone "Vietnam Memorial" is not.
+function isLikelyStatePark(name: string): boolean {
+  const n = name.toLowerCase();
+  if (n.includes('historic site'))    return false;
+  if (n.includes('historical site'))  return false;
+  if (n.includes('heritage site'))    return false;
+  if (n.includes('battlefield'))      return false;
+  if (n.includes('botanical garden')) return false;
+  if (n.includes('arboretum'))        return false;
+  if (n.includes('cemetery'))         return false;
+  if (n.includes('nature center'))    return false;
+  // Keep "Memorial State Park" / "Memorial Park" but drop bare memorials
+  if (n.includes('memorial') && !n.includes('park') && !n.includes('forest')) return false;
+  return true;
 }
 
 async function fetchParksOfType(
@@ -83,6 +100,7 @@ async function fetchParksOfType(
   for (const b of bindings) {
     const name = b.parkLabel?.value;
     if (!name || name.startsWith('Q')) continue; // skip unlabelled entries
+    if (!isLikelyStatePark(name)) continue;
 
     const coords = b.coord ? parseCoord(b.coord.value) : null;
     // Require coordinates — parks without them can't be mapped or located.
