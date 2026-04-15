@@ -4,11 +4,16 @@ import { batchUpsertParks } from '../db/parks';
 import { Park } from '../types';
 
 // PAD-US 3.0 — USGS Protected Areas Database of the United States
-// Layer 1 = Fee ownership (state parks are fee-owned land)
+// "Protected_Areas_by_Manager_State" is pre-filtered to state-managed lands
+// so we don't need Mang_Type='STAT' in the where clause.
+// Requires an ArcGIS API key — set ARCGIS_TOKEN below.
 const PADUS_ENDPOINT =
-  'https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/PAD_US3_0/FeatureServer/1/query';
+  'https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/Protected_Areas_by_Manager_State/FeatureServer/0/query';
 
-const CACHE_KEY = 'padus_state_parks_v6'; // bumped — switch to POST to avoid URL encoding
+// Get a free API key at developers.arcgis.com → Dashboard → API Keys
+const ARCGIS_TOKEN = '';
+
+const CACHE_KEY = 'padus_state_parks_v7'; // bumped — new endpoint + token
 const CACHE_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 const PAGE_SIZE = 1000;
 
@@ -59,10 +64,11 @@ async function fetchPage(
   desType: string,
   offset: number
 ): Promise<{ features: PadusFeature[]; hasMore: boolean }> {
-  // Use POST — ArcGIS REST supports it and it avoids all URL-encoding issues.
-  // fetch() re-encodes unencoded = and ' in GET URLs, which ArcGIS rejects.
-  const body = new URLSearchParams({
-    where:             `Mang_Type='STAT' AND Des_Tp='${desType}'`,
+  // Use POST to avoid URL-encoding issues with the where clause.
+  // Protected_Areas_by_Manager_State is already filtered to state managers,
+  // so we only need to filter by Des_Tp.
+  const params: Record<string, string> = {
+    where:             `Des_Tp='${desType}'`,
     outFields:         '*',
     returnCentroid:    'true',
     returnGeometry:    'false',
@@ -70,7 +76,9 @@ async function fetchPage(
     resultOffset:      String(offset),
     resultRecordCount: String(PAGE_SIZE),
     f:                 'json',
-  });
+  };
+  if (ARCGIS_TOKEN) params.token = ARCGIS_TOKEN;
+  const body = new URLSearchParams(params);
   console.log('[PAD-US] POST for desType:', desType, 'offset:', offset);
 
   const res = await fetch(PADUS_ENDPOINT, {

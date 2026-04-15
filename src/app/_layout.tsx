@@ -6,7 +6,7 @@ import { StyleSheet, Text, useColorScheme, View } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { initDatabase } from '../db/client';
 import { syncNpsParks } from '../services/npsApi';
-import { syncStateParksfromWikidata } from '../services/wikidataApi';
+import { syncStateParksFromPadus } from '../services/padusApi';
 import { Colors } from '../constants/colors';
 import { BadgeProvider } from '../context/BadgeContext';
 
@@ -33,8 +33,8 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
         await syncNpsParks(db).catch(console.warn);
         setSyncSignal(s => s + 1);
 
-        // Wikidata queries run per-designation so keep them in the background.
-        syncStateParksfromWikidata(db, (msg) => {
+        // PAD-US queries run per-designation so keep them in the background.
+        syncStateParksFromPadus(db, (msg) => {
           setSyncMessage(msg);
         })
           .catch(console.warn)
