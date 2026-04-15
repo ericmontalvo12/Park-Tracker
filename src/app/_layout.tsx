@@ -6,7 +6,7 @@ import { StyleSheet, Text, useColorScheme, View } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { initDatabase } from '../db/client';
 import { syncNpsParks } from '../services/npsApi';
-import { syncStateParksFromOSM } from '../services/osmApi';
+import { syncStateParksfromWikidata } from '../services/wikidataApi';
 import { Colors } from '../constants/colors';
 import { BadgeProvider } from '../context/BadgeContext';
 
@@ -33,8 +33,7 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
         await syncNpsParks(db).catch(console.warn);
         setSyncSignal(s => s + 1);
 
-        // OSM Overpass query runs in the background — takes ~30s on first load.
-        syncStateParksFromOSM(db, (msg) => {
+        syncStateParksfromWikidata(db, (msg) => {
           setSyncMessage(msg);
         })
           .catch(console.warn)
