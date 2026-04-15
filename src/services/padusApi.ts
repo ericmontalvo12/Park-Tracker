@@ -8,7 +8,7 @@ import { Park } from '../types';
 const PADUS_ENDPOINT =
   'https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/PAD_US3_0/FeatureServer/1/query';
 
-const CACHE_KEY = 'padus_state_parks_v3'; // bumped — invalidate empty cache from broken run
+const CACHE_KEY = 'padus_state_parks_v4'; // bumped — handle full state names
 const CACHE_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 const PAGE_SIZE = 1000;
 
@@ -20,13 +20,35 @@ const DESIGNATION_TYPES: Array<{ desType: string; designation: string }> = [
   { desType: 'SRA', designation: 'State Recreation Area' },
 ];
 
+// Full state name → 2-letter postal code
+// PAD-US 3.0 State_Nm field may contain full names in some layers.
+const STATE_NAME_TO_CODE: Record<string, string> = {
+  'ALABAMA': 'AL', 'ALASKA': 'AK', 'ARIZONA': 'AZ', 'ARKANSAS': 'AR',
+  'CALIFORNIA': 'CA', 'COLORADO': 'CO', 'CONNECTICUT': 'CT', 'DELAWARE': 'DE',
+  'FLORIDA': 'FL', 'GEORGIA': 'GA', 'HAWAII': 'HI', 'IDAHO': 'ID',
+  'ILLINOIS': 'IL', 'INDIANA': 'IN', 'IOWA': 'IA', 'KANSAS': 'KS',
+  'KENTUCKY': 'KY', 'LOUISIANA': 'LA', 'MAINE': 'ME', 'MARYLAND': 'MD',
+  'MASSACHUSETTS': 'MA', 'MICHIGAN': 'MI', 'MINNESOTA': 'MN', 'MISSISSIPPI': 'MS',
+  'MISSOURI': 'MO', 'MONTANA': 'MT', 'NEBRASKA': 'NE', 'NEVADA': 'NV',
+  'NEW HAMPSHIRE': 'NH', 'NEW JERSEY': 'NJ', 'NEW MEXICO': 'NM', 'NEW YORK': 'NY',
+  'NORTH CAROLINA': 'NC', 'NORTH DAKOTA': 'ND', 'OHIO': 'OH', 'OKLAHOMA': 'OK',
+  'OREGON': 'OR', 'PENNSYLVANIA': 'PA', 'RHODE ISLAND': 'RI', 'SOUTH CAROLINA': 'SC',
+  'SOUTH DAKOTA': 'SD', 'TENNESSEE': 'TN', 'TEXAS': 'TX', 'UTAH': 'UT',
+  'VERMONT': 'VT', 'VIRGINIA': 'VA', 'WASHINGTON': 'WA', 'WEST VIRGINIA': 'WV',
+  'WISCONSIN': 'WI', 'WYOMING': 'WY', 'DISTRICT OF COLUMBIA': 'DC',
+  'PUERTO RICO': 'PR', 'VIRGIN ISLANDS': 'VI', 'GUAM': 'GU',
+  'AMERICAN SAMOA': 'AS', 'NORTHERN MARIANA ISLANDS': 'MP',
+};
+
+function resolveStateCode(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const upper = raw.trim().toUpperCase();
+  if (upper.length === 2) return upper; // already an abbreviation
+  return STATE_NAME_TO_CODE[upper] ?? null;
+}
+
 interface PadusFeature {
-  attributes: {
-    Unit_Nm:   string;
-    Des_Tp:    string;
-    State_Nm:  string; // 2-letter state abbreviation in PAD-US 3.0
-    Mang_Nm?:  string;
-  };
+  attributes: Record<string, unknown>;
   centroid?: {
     x: number; // longitude (WGS84)
     y: number; // latitude  (WGS84)
@@ -52,13 +74,13 @@ async function fetchPage(
 
   if (json.error) throw new Error(`PAD-US API error: ${JSON.stringify(json.error)}`);
 
-  // Log first feature so we can verify field names and structure
+  // Log first feature — shows all field names so we can diagnose issues
   if (offset === 0 && json.features?.length > 0) {
     const sample = json.features[0];
-    console.log('[PAD-US] First feature attributes:', JSON.stringify(sample.attributes));
-    console.log('[PAD-US] First feature centroid:', JSON.stringify(sample.centroid));
-    console.log('[PAD-US] Total features in page:', json.features.length);
-    console.log('[PAD-US] exceededTransferLimit:', json.exceededTransferLimit);
+    console.log('[PAD-US] ALL attribute keys:', Object.keys(sample.attributes).join(', '));
+    console.log('[PAD-US] State_Nm value:', sample.attributes.State_Nm);
+    console.log('[PAD-US] centroid:', JSON.stringify(sample.centroid));
+    console.log('[PAD-US] Page count:', json.features.length, '| hasMore:', json.exceededTransferLimit);
   }
 
   if (offset === 0 && (!json.features || json.features.length === 0)) {
@@ -78,22 +100,25 @@ async function fetchAllOfType(
   const parks: Park[] = [];
   const seen = new Set<string>();
   let offset = 0;
+  let skippedState = 0;
+  let skippedCentroid = 0;
 
   while (true) {
     const { features, hasMore } = await fetchPage(desType, offset);
 
     for (const f of features) {
-      const name = f.attributes.Unit_Nm?.trim();
+      const attrs = f.attributes;
+      const name = (attrs.Unit_Nm as string)?.trim();
       if (!name) continue;
 
-      // State_Nm is 2-letter abbreviation in PAD-US 3.0
-      const stateCode = f.attributes.State_Nm?.trim().toUpperCase();
-      if (!stateCode || stateCode.length !== 2) continue;
+      // State_Nm may be a full name ("California") or 2-letter code ("CA")
+      const stateCode = resolveStateCode(attrs.State_Nm as string | undefined);
+      if (!stateCode) { skippedState++; continue; }
 
       // Centroid required for map placement
       const lon = f.centroid?.x;
       const lat = f.centroid?.y;
-      if (!lon || !lat) continue;
+      if (!lon || !lat) { skippedCentroid++; continue; }
 
       // Deduplicate by name + state
       const key = `${name}|${stateCode}`;
@@ -126,6 +151,7 @@ async function fetchAllOfType(
     offset += PAGE_SIZE;
   }
 
+  console.log(`[PAD-US] ${designation}: kept ${parks.length}, skipped state=${skippedState} centroid=${skippedCentroid}`);
   return parks;
 }
 
