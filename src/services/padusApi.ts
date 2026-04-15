@@ -8,7 +8,7 @@ import { Park } from '../types';
 const PADUS_ENDPOINT =
   'https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/PAD_US3_0/FeatureServer/1/query';
 
-const CACHE_KEY = 'padus_state_parks_v2'; // bumped for debug run
+const CACHE_KEY = 'padus_state_parks_v3'; // bumped — invalidate empty cache from broken run
 const CACHE_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 const PAGE_SIZE = 1000;
 
@@ -54,7 +54,9 @@ async function fetchPage(
 
   // Log first feature so we can verify field names and structure
   if (offset === 0 && json.features?.length > 0) {
-    console.log('[PAD-US] First feature sample:', JSON.stringify(json.features[0]));
+    const sample = json.features[0];
+    console.log('[PAD-US] First feature attributes:', JSON.stringify(sample.attributes));
+    console.log('[PAD-US] First feature centroid:', JSON.stringify(sample.centroid));
     console.log('[PAD-US] Total features in page:', json.features.length);
     console.log('[PAD-US] exceededTransferLimit:', json.exceededTransferLimit);
   }
@@ -149,6 +151,8 @@ export async function syncStateParksFromPadus(
     }
   }
 
-  await kvSet(db, CACHE_KEY, String(Date.now()));
+  // Only cache a successful run — if we got 0 parks something went wrong
+  // and we want to retry on next launch instead of sitting on a stale empty cache.
+  if (total > 0) await kvSet(db, CACHE_KEY, String(Date.now()));
   onProgress?.(`Synced ${total} state parks from PAD-US`);
 }
