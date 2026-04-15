@@ -8,7 +8,7 @@ import { Park } from '../types';
 const PADUS_ENDPOINT =
   'https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/PAD_US3_0/FeatureServer/1/query';
 
-const CACHE_KEY = 'padus_state_parks_v4'; // bumped — handle full state names
+const CACHE_KEY = 'padus_state_parks_v5'; // bumped — fix where-clause encoding
 const CACHE_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 const PAGE_SIZE = 1000;
 
@@ -59,9 +59,10 @@ async function fetchPage(
   desType: string,
   offset: number
 ): Promise<{ features: PadusFeature[]; hasMore: boolean }> {
-  // Build URL manually — URLSearchParams encodes '=' as %3D and "'" as %27
-  // inside values, which ArcGIS REST rejects with "Invalid URL".
-  const where = encodeURIComponent(`Mang_Type='STAT' AND Des_Tp='${desType}'`);
+  // ArcGIS REST rejects percent-encoded '=' (%3D) in the where clause.
+  // Only encode spaces — leave '=' and "'" as literal characters.
+  const whereRaw = `Mang_Type='STAT' AND Des_Tp='${desType}'`;
+  const where = whereRaw.replace(/ /g, '%20');
   const url = `${PADUS_ENDPOINT}?where=${where}&outFields=*&returnCentroid=true&returnGeometry=false&outSR=4326&resultOffset=${offset}&resultRecordCount=${PAGE_SIZE}&f=json`;
   console.log('[PAD-US] Fetching:', url.slice(0, 120));
 
