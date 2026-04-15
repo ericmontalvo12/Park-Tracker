@@ -3,8 +3,13 @@ import { kvGet, kvSet } from '../db/client';
 import { batchUpsertParks } from '../db/parks';
 import { Park } from '../types';
 
-const OVERPASS_ENDPOINT = 'https://overpass-api.de/api/interpreter';
-const CACHE_KEY = 'osm_state_parks_v6';
+// Multiple public Overpass mirrors — tried in order on failure
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+];
+const CACHE_KEY = 'osm_state_parks_v7';
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // Sequential — Overpass rate-limits concurrent requests (429)
@@ -112,26 +117,27 @@ async function fetchStateParks(stateCode: string): Promise<OsmElement[]> {
   const query = buildStateQuery(stateCode);
   const body = `data=${encodeURIComponent(query)}`;
 
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    if (attempt > 1) await new Promise(r => setTimeout(r, attempt * 2000));
-    try {
-      const res = await fetch(OVERPASS_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body,
-      });
-      // 504 = server-side timeout — retrying won't help, skip immediately
-      if (res.status === 504) { console.warn(`[OSM] ${stateCode} timeout, skipping`); return []; }
-      // 429/503 = rate limited — wait and retry
-      if (res.status === 429 || res.status === 503) continue;
-      if (!res.ok) { console.warn(`[OSM] ${stateCode} HTTP ${res.status}`); return []; }
-      const json = await res.json();
-      return json.elements ?? [];
-    } catch {
-      // network error — retry
+  // Try each mirror in sequence; move to next on 504/429
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      if (attempt > 1) await new Promise(r => setTimeout(r, 3000));
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body,
+        });
+        if (res.status === 504) break;          // timeout on this mirror → try next
+        if (res.status === 429 || res.status === 503) continue; // rate-limited → retry same
+        if (!res.ok) { console.warn(`[OSM] ${stateCode} HTTP ${res.status}`); break; }
+        const json = await res.json();
+        return json.elements ?? [];
+      } catch {
+        // network error — retry
+      }
     }
   }
-  console.warn(`[OSM] ${stateCode} failed after 3 attempts`);
+  console.warn(`[OSM] ${stateCode} failed on all mirrors`);
   return [];
 }
 
