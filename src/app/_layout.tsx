@@ -33,19 +33,29 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
         setSyncSignal(s => s + 1);
 
         // Try Wikidata first, fall back to OSM if it fails or returns no parks
-        syncStateParksfromWikidata(db, (msg) => setSyncMessage(msg))
-          .then(async () => {
-            // Check if we got any state parks
-            const result = await db.getFirstAsync<{ count: number }>(
-              "SELECT COUNT(*) as count FROM parks WHERE source = 'state'"
-            );
-            if (!result || result.count === 0) {
-              console.log('[Sync] Wikidata returned no parks, trying OSM fallback…');
+        (async () => {
+          try {
+            await syncStateParksfromWikidata(db, (msg) => setSyncMessage(msg));
+          } catch (err) {
+            console.warn('[Wikidata] Sync failed:', err);
+          }
+
+          // Check if we got any state parks, try OSM if not
+          const result = await db.getFirstAsync<{ count: number }>(
+            "SELECT COUNT(*) as count FROM parks WHERE source = 'state'"
+          );
+          if (!result || result.count === 0) {
+            console.log('[Sync] No state parks found, trying OSM fallback…');
+            try {
               await syncStateParksFromOSM(db, (msg) => setSyncMessage(msg));
+            } catch (err) {
+              console.warn('[OSM] Sync failed:', err);
             }
-          })
-          .catch(console.warn)
-          .finally(() => { setSyncMessage(null); setSyncSignal(s => s + 1); });
+          }
+
+          setSyncMessage(null);
+          setSyncSignal(s => s + 1);
+        })();
       }}
     >
       <BadgeProvider>
