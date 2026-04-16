@@ -9,7 +9,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/images/icon.png",
-      "bundleIdentifier": "com.yourname.parktracker",
+      "bundleIdentifier": "com.ericmontalvo.parktracker",
       "infoPlist": {
         "NSCameraUsageDescription": "Park Tracker uses your camera so you can add photos to the parks you visit.",
         "NSPhotoLibraryUsageDescription": "Park Tracker accesses your photo library so you can attach photos to parks you visit.",
@@ -18,7 +18,7 @@
       }
     },
     "android": {
-      "package": "com.yourname.parktracker",
+      "package": "com.ericmontalvo.parktracker",
       "adaptiveIcon": {
         "backgroundColor": "#F5F0E8",
         "foregroundImage": "./assets/images/icon.png"

@@ -4,7 +4,7 @@ import { batchUpsertParks } from '../db/parks';
 import { Park } from '../types';
 
 const SPARQL_ENDPOINT = 'https://query.wikidata.org/sparql';
-const CACHE_KEY = 'wikidata_state_parks_v3'; // bumped — added image fetch
+const CACHE_KEY = 'wikidata_state_parks_v7'; // bumped — fix empty-cache guard
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // Fetches all US entities of a given Wikidata type (e.g. Q179049 = state park).
@@ -25,17 +25,18 @@ interface WDBinding {
   image?:     { value: string };
 }
 
-// Two-hop P131 lookup (park → [county →] state) so parks filed under a county
-// still get a state code. The UNION keeps the query fast by only going one
-// extra level rather than using unbounded wdt:P131+.
+// Uses direct wdt:P31 only (no transitive wdt:P279*) to avoid pulling in
+// federal wildlife refuges, marine sanctuaries, biosphere reserves, etc.
+// that Wikidata classifies as subclasses of state-park types.
+// Also filters out known non-state-park name patterns.
 function buildQuery(qid: string): string {
   return `
 SELECT DISTINCT ?park ?parkLabel ?coord ?stateAbbr ?image WHERE {
-  ?park wdt:P31/wdt:P279* wd:${qid} .
+  ?park wdt:P31 wd:${qid} .
   ?park wdt:P17 wd:Q30 .
   OPTIONAL { ?park wdt:P625 ?coord . }
   OPTIONAL { ?park wdt:P18 ?image . }
-  OPTIONAL {
+  {
     {
       ?park wdt:P131 ?loc .
     } UNION {
@@ -46,6 +47,7 @@ SELECT DISTINCT ?park ?parkLabel ?coord ?stateAbbr ?image WHERE {
     FILTER(STRSTARTS(?stateAbbr, "US-"))
   }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+  FILTER(!REGEX(STR(?parkLabel), "National Wildlife Refuge|National Marine Sanctuary|National Park|National Monument|National Preserve|National Recreation Area|Biosphere Reserve|Research Natural Area|Experimental Forest|Experimental Range|Wildlife Management Area|Wildlife Refuge|Marine Reserve|Marine Conservation|Historic Site|Historical Site|Heritage Site|Battlefield|Botanical Garden|Arboretum|Cemetery|Museum|Nature Center|State Prison|Correctional", "i"))
 }
 LIMIT 5000`.trim();
 }
@@ -57,16 +59,49 @@ function parseCoord(s: string): { lat: number; lon: number } | null {
   return { lon: parseFloat(m[1]), lat: parseFloat(m[2]) };
 }
 
+// Client-side guard for names that slip past the SPARQL filter.
+// "Memorial State Park" is fine; a standalone "Vietnam Memorial" is not.
+function isLikelyStatePark(name: string): boolean {
+  const n = name.toLowerCase();
+  if (n.includes('historic site'))    return false;
+  if (n.includes('historical site'))  return false;
+  if (n.includes('heritage site'))    return false;
+  if (n.includes('battlefield'))      return false;
+  if (n.includes('botanical garden')) return false;
+  if (n.includes('arboretum'))        return false;
+  if (n.includes('cemetery'))         return false;
+  if (n.includes('nature center'))    return false;
+  // Keep "Memorial State Park" / "Memorial Park" but drop bare memorials
+  if (n.includes('memorial') && !n.includes('park') && !n.includes('forest')) return false;
+  return true;
+}
+
 async function fetchParksOfType(
   designation: string,
   qid: string
 ): Promise<Park[]> {
   const query = buildQuery(qid);
-  const url = `${SPARQL_ENDPOINT}?query=${encodeURIComponent(query)}&format=json`;
 
-  const res = await fetch(url, {
-    headers: { Accept: 'application/sparql-results+json' },
-  });
+  // Use POST to avoid URL-length limits on long queries.
+  // Add User-Agent — Wikidata throttles requests without one.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 90_000);
+
+  let res: Response;
+  try {
+    res = await fetch(SPARQL_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/sparql-results+json',
+        'User-Agent': 'ParkTrackerApp/1.0 (park-tracker-mobile)',
+      },
+      body: `query=${encodeURIComponent(query)}&format=json`,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok) throw new Error(`Wikidata ${res.status}`);
 
   const json = await res.json();
@@ -81,6 +116,7 @@ async function fetchParksOfType(
   for (const b of bindings) {
     const name = b.parkLabel?.value;
     if (!name || name.startsWith('Q')) continue; // skip unlabelled entries
+    if (!isLikelyStatePark(name)) continue;
 
     const coords = b.coord ? parseCoord(b.coord.value) : null;
     // Require coordinates — parks without them can't be mapped or located.
@@ -88,6 +124,11 @@ async function fetchParksOfType(
 
     const rawState = b.stateAbbr?.value ?? '';
     const stateCode = rawState.startsWith('US-') ? rawState.slice(3) : rawState;
+
+    // Drop entries we can't attribute to a US state — they're usually
+    // federal land or private preserves with incomplete Wikidata records.
+    if (!stateCode) continue;
+
     const id = `wiki_${b.park.value.split('/').pop()}`;
 
     const existing = parkMap.get(id);
@@ -123,6 +164,7 @@ export async function syncStateParksfromWikidata(
   const lastSync = await kvGet(db, CACHE_KEY);
   if (lastSync && Date.now() - parseInt(lastSync) < CACHE_TTL_MS) return;
 
+  console.log('[Wikidata] Starting sync…');
   // Wipe old state park data before fresh sync
   await db.runAsync("DELETE FROM parks WHERE source = 'state'");
 
@@ -139,6 +181,7 @@ export async function syncStateParksfromWikidata(
     }
   }
 
-  await kvSet(db, CACHE_KEY, String(Date.now()));
+  if (total > 0) await kvSet(db, CACHE_KEY, String(Date.now()));
   onProgress?.(`Synced ${total} state parks`);
+  console.log(`[Wikidata] Sync complete. Total parks: ${total}`);
 }
