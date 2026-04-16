@@ -13,7 +13,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Park Tracker uses your camera so you can add photos to the parks you visit.",
         "NSPhotoLibraryUsageDescription": "Park Tracker accesses your photo library so you can attach photos to parks you visit.",
-        "NSLocationWhenInUseUsageDescription": "Park Tracker uses your location to show you on the map near parks."
+        "NSLocationWhenInUseUsageDescription": "Park Tracker uses your location to show you on the map near parks.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -27,7 +28,8 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION"
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.RECORD_AUDIO"
       ],
       "predictiveBackGestureEnabled": false
     },
@@ -64,6 +66,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "19e688ae-f56f-4f2b-8e0a-b7eeee1db549"
+      }
     }
   }
 }
