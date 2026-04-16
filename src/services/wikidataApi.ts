@@ -85,7 +85,7 @@ async function fetchParksOfType(
   // Use POST to avoid URL-length limits on long queries.
   // Add User-Agent — Wikidata throttles requests without one.
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 45_000);
+  const timer = setTimeout(() => controller.abort(), 90_000);
 
   let res: Response;
   try {

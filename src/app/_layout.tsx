@@ -28,13 +28,12 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
       onInit={async (db) => {
         await initDatabase(db);
 
-        // Await both syncs before the UI renders so all parks are ready.
         await syncNpsParks(db).catch(console.warn);
-        await syncStateParksfromWikidata(db, (msg) => {
-          setSyncMessage(msg);
-        }).catch(console.warn);
-        setSyncMessage(null);
         setSyncSignal(s => s + 1);
+
+        syncStateParksfromWikidata(db, (msg) => setSyncMessage(msg))
+          .catch(console.warn)
+          .finally(() => { setSyncMessage(null); setSyncSignal(s => s + 1); });
       }}
     >
       <BadgeProvider>
