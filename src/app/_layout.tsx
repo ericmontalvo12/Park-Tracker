@@ -7,6 +7,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { initDatabase } from '../db/client';
 import { syncNpsParks } from '../services/npsApi';
 import { syncStateParksfromWikidata } from '../services/wikidataApi';
+import { syncStateParksFromOSM } from '../services/osmApi';
 import { Colors } from '../constants/colors';
 import { BadgeProvider } from '../context/BadgeContext';
 
@@ -31,7 +32,18 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
         await syncNpsParks(db).catch(console.warn);
         setSyncSignal(s => s + 1);
 
+        // Try Wikidata first, fall back to OSM if it fails or returns no parks
         syncStateParksfromWikidata(db, (msg) => setSyncMessage(msg))
+          .then(async () => {
+            // Check if we got any state parks
+            const result = await db.getFirstAsync<{ count: number }>(
+              "SELECT COUNT(*) as count FROM parks WHERE source = 'state'"
+            );
+            if (!result || result.count === 0) {
+              console.log('[Sync] Wikidata returned no parks, trying OSM fallback…');
+              await syncStateParksFromOSM(db, (msg) => setSyncMessage(msg));
+            }
+          })
           .catch(console.warn)
           .finally(() => { setSyncMessage(null); setSyncSignal(s => s + 1); });
       }}

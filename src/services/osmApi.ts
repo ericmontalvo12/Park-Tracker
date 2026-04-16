@@ -147,10 +147,8 @@ export async function syncStateParksFromOSM(
   const lastSync = await kvGet(db, CACHE_KEY);
   if (lastSync && Date.now() - parseInt(lastSync) < CACHE_TTL_MS) return;
 
-  await db.runAsync("DELETE FROM parks WHERE source = 'state'");
-
   const seen = new Set<string>();
-  let total = 0;
+  const allParks: Park[] = [];
 
   // Process one state at a time to stay within Overpass rate limits
   for (let i = 0; i < US_STATE_CODES.length; i++) {
@@ -158,7 +156,6 @@ export async function syncStateParksFromOSM(
     onProgress?.(`Loading ${stateCode}… (${i + 1}/${US_STATE_CODES.length})`);
 
     const elements = await fetchStateParks(stateCode);
-    const parks: Park[] = [];
 
     for (const el of elements) {
       const name = el.tags?.name?.trim();
@@ -169,7 +166,7 @@ export async function syncStateParksFromOSM(
       if (seen.has(key)) continue;
       seen.add(key);
 
-      parks.push({
+      allParks.push({
         id:          `osm_${el.type[0]}${el.id}`,
         source:      'state',
         fullName:    name,
@@ -184,9 +181,7 @@ export async function syncStateParksFromOSM(
       });
     }
 
-    if (parks.length > 0) await batchUpsertParks(db, parks);
-    total += parks.length;
-    console.log(`[OSM] ${stateCode} → ${parks.length} parks (total ${total})`);
+    console.log(`[OSM] ${stateCode} → ${allParks.length} parks total`);
 
     // Respect Overpass rate limit between requests
     if (i < US_STATE_CODES.length - 1) {
@@ -194,6 +189,14 @@ export async function syncStateParksFromOSM(
     }
   }
 
-  if (total > 0) await kvSet(db, CACHE_KEY, String(Date.now()));
-  onProgress?.(`Synced ${total} state parks`);
+  // Only replace data if we got results
+  if (allParks.length > 0) {
+    await db.runAsync("DELETE FROM parks WHERE source = 'state'");
+    await batchUpsertParks(db, allParks);
+    await kvSet(db, CACHE_KEY, String(Date.now()));
+  } else {
+    console.warn('[OSM] No parks fetched, keeping existing data');
+  }
+
+  onProgress?.(`Synced ${allParks.length} state parks`);
 }

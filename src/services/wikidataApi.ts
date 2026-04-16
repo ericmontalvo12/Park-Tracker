@@ -4,7 +4,7 @@ import { batchUpsertParks } from '../db/parks';
 import { Park } from '../types';
 
 const SPARQL_ENDPOINT = 'https://query.wikidata.org/sparql';
-const CACHE_KEY = 'wikidata_state_parks_v7'; // bumped — fix empty-cache guard
+const CACHE_KEY = 'wikidata_state_parks_v8'; // bumped — fetch before delete
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // Fetches all US entities of a given Wikidata type (e.g. Q179049 = state park).
@@ -165,23 +165,29 @@ export async function syncStateParksfromWikidata(
   if (lastSync && Date.now() - parseInt(lastSync) < CACHE_TTL_MS) return;
 
   console.log('[Wikidata] Starting sync…');
-  // Wipe old state park data before fresh sync
-  await db.runAsync("DELETE FROM parks WHERE source = 'state'");
 
-  let total = 0;
+  // Fetch all parks first BEFORE deleting, so we don't lose data on failure
+  const allParks: Park[] = [];
   for (const { type, qid, designation } of QUERIES) {
     onProgress?.(`Loading ${type}s…`);
     try {
       const parks = await fetchParksOfType(designation, qid);
-      if (parks.length > 0) await batchUpsertParks(db, parks);
-      total += parks.length;
-      onProgress?.(`Loaded ${total} state parks so far…`);
+      allParks.push(...parks);
+      onProgress?.(`Loaded ${allParks.length} state parks so far…`);
     } catch (err) {
       console.warn(`Wikidata fetch failed for ${type}:`, err);
     }
   }
 
-  if (total > 0) await kvSet(db, CACHE_KEY, String(Date.now()));
-  onProgress?.(`Synced ${total} state parks`);
-  console.log(`[Wikidata] Sync complete. Total parks: ${total}`);
+  // Only replace data if we got results - prevents losing parks on API failure
+  if (allParks.length > 0) {
+    await db.runAsync("DELETE FROM parks WHERE source = 'state'");
+    await batchUpsertParks(db, allParks);
+    await kvSet(db, CACHE_KEY, String(Date.now()));
+  } else {
+    console.warn('[Wikidata] No parks fetched, keeping existing data');
+  }
+
+  onProgress?.(`Synced ${allParks.length} state parks`);
+  console.log(`[Wikidata] Sync complete. Total parks: ${allParks.length}`);
 }
