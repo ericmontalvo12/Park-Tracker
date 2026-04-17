@@ -8,6 +8,8 @@ import { initDatabase } from '../db/client';
 import { syncNpsParks } from '../services/npsApi';
 import { syncStateParksfromWikidata } from '../services/wikidataApi';
 import { syncStateParksFromOSM } from '../services/osmApi';
+import { getStaticStateParks } from '../data/stateParks';
+import { batchUpsertParks } from '../db/parks';
 import { Colors } from '../constants/colors';
 import { BadgeProvider } from '../context/BadgeContext';
 
@@ -41,7 +43,7 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
           }
 
           // Check if we got any state parks, try OSM if not
-          const result = await db.getFirstAsync<{ count: number }>(
+          let result = await db.getFirstAsync<{ count: number }>(
             "SELECT COUNT(*) as count FROM parks WHERE source = 'state'"
           );
           if (!result || result.count === 0) {
@@ -51,6 +53,18 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
             } catch (err) {
               console.warn('[OSM] Sync failed:', err);
             }
+          }
+
+          // Final fallback: use static data if both APIs failed
+          result = await db.getFirstAsync<{ count: number }>(
+            "SELECT COUNT(*) as count FROM parks WHERE source = 'state'"
+          );
+          if (!result || result.count === 0) {
+            console.log('[Sync] No state parks from APIs, loading static data…');
+            setSyncMessage('Loading state parks…');
+            const staticParks = getStaticStateParks();
+            await batchUpsertParks(db, staticParks);
+            console.log(`[Sync] Loaded ${staticParks.length} static state parks`);
           }
 
           setSyncMessage(null);
