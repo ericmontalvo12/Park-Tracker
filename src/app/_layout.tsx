@@ -2,15 +2,10 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { SQLiteProvider } from 'expo-sqlite';
 import { Stack } from 'expo-router';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { StyleSheet, Text, useColorScheme, View } from 'react-native';
+import { useColorScheme } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { initDatabase } from '../db/client';
 import { syncNpsParks } from '../services/npsApi';
-import { syncStateParksfromWikidata } from '../services/wikidataApi';
-import { syncStateParksFromOSM } from '../services/osmApi';
-import { getStaticStateParks } from '../data/stateParks';
-import { batchUpsertParks } from '../db/parks';
-import { Colors } from '../constants/colors';
 import { BadgeProvider } from '../context/BadgeContext';
 
 SplashScreen.preventAutoHideAsync();
@@ -20,9 +15,6 @@ export const SyncSignalContext = createContext(0);
 export function useSyncSignal() { return useContext(SyncSignalContext); }
 
 function AppInitializer({ children }: { children: React.ReactNode }) {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === 'dark' ? 'dark' : 'light'];
-  const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [syncSignal, setSyncSignal] = useState(0);
 
   return (
@@ -31,45 +23,9 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
       onInit={async (db) => {
         await initDatabase(db);
 
+        // Sync National Parks from NPS API
         await syncNpsParks(db).catch(console.warn);
         setSyncSignal(s => s + 1);
-
-        // Try Wikidata first, fall back to OSM if it fails or returns no parks
-        (async () => {
-          try {
-            await syncStateParksfromWikidata(db, (msg) => setSyncMessage(msg));
-          } catch (err) {
-            console.warn('[Wikidata] Sync failed:', err);
-          }
-
-          // Check if we got any state parks, try OSM if not
-          let result = await db.getFirstAsync<{ count: number }>(
-            "SELECT COUNT(*) as count FROM parks WHERE source = 'state'"
-          );
-          if (!result || result.count === 0) {
-            console.log('[Sync] No state parks found, trying OSM fallback…');
-            try {
-              await syncStateParksFromOSM(db, (msg) => setSyncMessage(msg));
-            } catch (err) {
-              console.warn('[OSM] Sync failed:', err);
-            }
-          }
-
-          // Final fallback: use static data if both APIs failed
-          result = await db.getFirstAsync<{ count: number }>(
-            "SELECT COUNT(*) as count FROM parks WHERE source = 'state'"
-          );
-          if (!result || result.count === 0) {
-            console.log('[Sync] No state parks from APIs, loading static data…');
-            setSyncMessage('Loading state parks…');
-            const staticParks = getStaticStateParks();
-            await batchUpsertParks(db, staticParks);
-            console.log(`[Sync] Loaded ${staticParks.length} static state parks`);
-          }
-
-          setSyncMessage(null);
-          setSyncSignal(s => s + 1);
-        })();
       }}
     >
       <BadgeProvider>
@@ -77,12 +33,6 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
           {children}
         </SyncSignalContext.Provider>
       </BadgeProvider>
-
-      {syncMessage && (
-        <View style={[styles.syncBanner, { backgroundColor: colors.tint }]}>
-          <Text style={styles.syncText}>{syncMessage}</Text>
-        </View>
-      )}
     </SQLiteProvider>
   );
 }
@@ -108,20 +58,3 @@ export default function RootLayout() {
     </AppInitializer>
   );
 }
-
-const styles = StyleSheet.create({
-  syncBanner: {
-    position: 'absolute',
-    bottom: 90,
-    left: 20,
-    right: 20,
-    padding: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  syncText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-});

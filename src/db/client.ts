@@ -1,5 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import { migrations } from './migrations';
+import { seedStateParks } from '../services/seedStateParks';
 
 export async function initDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
   await db.execAsync('PRAGMA journal_mode = WAL;');
@@ -23,6 +24,9 @@ export async function initDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
       await db.runAsync('INSERT INTO _migrations (version) VALUES (?)', [migration.version]);
     }
   }
+
+  // Seed state parks data
+  await seedStateParks(db);
 }
 
 // KV store helpers
